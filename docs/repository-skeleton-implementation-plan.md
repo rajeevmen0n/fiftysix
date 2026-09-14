@@ -369,7 +369,7 @@ export function createStorageFactory(): StorageFactory;
 
 ---
 
-### [ ] S005: Implement the HTTP and WebSocket server edge
+### [x] S005: Implement the HTTP and WebSocket server edge
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -407,24 +407,24 @@ export interface AppDependencies {
 export function createApp(dependencies: AppDependencies): Hono;
 ```
 
-- [ ] Add `GET /healthz` returning schema-backed JSON `{status: "ok"}` with status 200 after
+- [x] Add `GET /healthz` returning schema-backed JSON `{status: "ok"}` with status 200 after
   `storage.checkHealth()` succeeds and `{status: "unavailable"}` with status 503 if it fails. Log
   the failure without leaking database URLs or filesystem paths.
-- [ ] Create the `/ws` edge with `@hono/node-ws`. Enforce configured origins before upgrade,
+- [x] Create the `/ws` edge with `@hono/node-ws`. Enforce configured origins before upgrade,
   limit each message to 65,536 UTF-8 bytes, require the first message to be `hello`, parse it with
   `helloMessageSchema`, and map malformed/order/size failures to the stable protocol error before
   closing with an appropriate WebSocket close code.
-- [ ] Route a valid token to the injected `HelloHandler`. Supply a bootstrap handler in the later
+- [x] Route a valid token to the injected `HelloHandler`. Supply a bootstrap handler in the later
   composition root that always returns `error(invalid_token)` and closes; no token can authenticate
   until the rooms subsystem replaces this handler with `AccessService` integration.
-- [ ] Track open peers in an injected registry for later shutdown. Make close/error cleanup
+- [x] Track open peers in an injected registry for later shutdown. Make close/error cleanup
   identity-safe and isolate send failures. Keep HTTP and socket handlers limited to parse, call,
   serialize, and close operations.
-- [ ] Start the app from a one-off `tsx` harness with in-memory fake dependencies. Verify
+- [x] Start the app from a one-off `tsx` harness with in-memory fake dependencies. Verify
   `/healthz`, disallowed origin, oversize message, message-before-hello, malformed hello, and
   valid-but-unknown token behavior using `curl` and a WebSocket CLI available through nixpkgs or
   a short Node client command; do not add a permanent test tool or file.
-- [ ] Run typecheck, lint, build, and `git diff --check`; require success. Inspect logs from known
+- [x] Run typecheck, lint, build, and `git diff --check`; require success. Inspect logs from known
   tokens and require no token value, then update plan/progress and commit
   `feat(server): add HTTP and WebSocket edge`.
 

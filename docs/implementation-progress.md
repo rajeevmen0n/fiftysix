@@ -7,25 +7,26 @@ implementation plans.
 
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
-| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S005 | Execute S005 after user approval |
+| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S006 | Execute S006 after user approval |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute E001 after skeleton is complete |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute R001 after skeleton and engine are complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-S004 — Establish the swappable storage boundary and migration baseline — this unit commit
-(`feat(server): add storage foundation`).
+S005 — Implement the HTTP and WebSocket server edge — this unit commit
+(`feat(server): add HTTP and WebSocket edge`).
 
-- Verification: an explicit temporary SQLite database was migrated twice, health checked, and
-  closed idempotently on 2026-09-14. Schema inspection found only Kysely's migration and lock
-  tables, the `001_initial` record, and an unlocked migration lock; relative-file and in-memory
-  targets also passed, unsupported schemes were rejected, and temporary files were removed.
+- Verification: a one-off in-memory server harness exercised healthy and unavailable
+  `/healthz` responses, denied and missing origins, UTF-8 oversize messages, messages before
+  hello, malformed hello, and valid-but-unknown tokens on 2026-09-14. Responses and WebSocket
+  close codes matched the protocol, the known token reached only the injected handler, health
+  logs omitted the thrown detail, and all connection-registry entries were cleaned up.
+- Failure isolation: a focused harness confirmed one broken peer does not stop `closeAll`, and a
+  failed send performs cleanup and logs exactly once.
 - Repository checks: `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`,
   `nix develop -c pnpm build`, and staged `git diff --check` all exited 0.
-- Boundary inspection: no TypeScript file outside `apps/server/src/storage/` imports Kysely or
-  `better-sqlite3`; the default `fiftysix.db` was not created.
-- Next unit: S005, Implement the HTTP and WebSocket server edge.
+- Next unit: S006, Add the browser connection client and localized status screen.
 
 ## Implementation readiness
 
