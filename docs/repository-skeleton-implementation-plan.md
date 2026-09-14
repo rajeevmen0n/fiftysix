@@ -266,7 +266,7 @@ export const healthResponseSchema: z.ZodType<HealthResponse>;
 
 ---
 
-### [ ] S003: Add configuration and injected runtime primitives
+### [x] S003: Add configuration and injected runtime primitives
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -304,20 +304,20 @@ export interface Scheduler {
 }
 ```
 
-- [ ] Parse the six documented variables with Zod from an explicit environment object. Apply
+- [x] Parse the six documented variables with Zod from an explicit environment object. Apply
   exact defaults `127.0.0.1`, `8056`, `sqlite://./fiftysix.db`, unset, unset, and `info`; validate
   port range, nonempty host/database URL, absolute-or-relative secret-file path, comma-separated
   HTTP(S) origins without empty entries, and pino log level. Format invalid startup errors without
   including secret-file contents.
-- [ ] Add a pino factory that receives `AppConfig`, writes JSON to stdout, and exposes no module
+- [x] Add a pino factory that receives `AppConfig`, writes JSON to stdout, and exposes no module
   singleton.
-- [ ] Implement production adapters around `Date.now`, `node:crypto` byte/random-integer APIs,
+- [x] Implement production adapters around `Date.now`, `node:crypto` byte/random-integer APIs,
   and cancellable `setTimeout`. Keep those ambient APIs out of the interfaces and all future
   domain services.
-- [ ] Use `tsx` one-off commands to demonstrate defaults, complete overrides, and failures for an
+- [x] Use `tsx` one-off commands to demonstrate defaults, complete overrides, and failures for an
   invalid port/origin/log level. Exercise scheduler cancellation and bounded random integers
   without adding test files.
-- [ ] Run typecheck, lint, build, and `git diff --check`; require success. Confirm with `rg` that
+- [x] Run typecheck, lint, build, and `git diff --check`; require success. Confirm with `rg` that
   ambient time/random calls occur only in runtime adapters, then update plan/progress and commit
   `feat(server): add runtime configuration`.
 
