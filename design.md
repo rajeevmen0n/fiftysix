@@ -202,6 +202,8 @@ them surrender.
 - Three options: **Create a table**, **Join a game** (room code, name, optional PIN) and
   **Join as Table view** (room code only).
 - Opening `/?room=CODE` fills the code into both join forms.
+- A successful player create/join navigates to `/room/:code`. A successful Table authorization
+  navigates to `/table/:code`.
 
 ### 12.2 Create a table
 - Shows the basic settings (§2), plus name and optional PIN. An **Advanced options** section is

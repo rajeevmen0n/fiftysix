@@ -10,7 +10,7 @@ implementation plans.
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Plan approved; ready | — | Execute S001 |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute E001 after skeleton is complete |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Planned; prerequisites missing | — | Execute R001 after skeleton and engine are complete |
-| UI and visual design | Not written | Design approved; planning deferred | — | Write the UI plan after the skeleton and engine plans |
+| UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 

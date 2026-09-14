@@ -168,7 +168,7 @@ message.
 
 ### 5.1 Core
 - **React 19**, **Vite**, TypeScript.
-- **React Router** for `/`, `/debug` and in-room routes (defined with the rooms subsystem).
+- **React Router** for `/`, `/room/:code`, `/table/:code`, and `/debug`.
 - **Zustand** store holding connection status, the current view, host actions and the animation
   queue. No server-cache library; all game data arrives over the WebSocket.
 - **WebSocket client** (`net/`):

@@ -229,6 +229,9 @@ The home screen presents Create a table, Join a game, and Join as Table view as 
 paths. A room link pre-fills both join paths. Forms keep labels visible, explain errors beside the
 relevant field, and preserve valid entries after rejection.
 
+Successful player creation/joining navigates to `/room/:code`; successful Table authorization
+navigates to `/table/:code`.
+
 Create starts with the required basic settings. Advanced settings are collapsed and summarise any
 non-default choices when closed. Choices that are impossible for the selected game/player count
 are removed or disabled with an explanation.
