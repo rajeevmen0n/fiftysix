@@ -1,0 +1,37 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/.direnv",
+      "!**/.env",
+      "!**/.env.*",
+      "!**/.pnpm-store",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/result",
+      "!**/result-*",
+      "!**/*.db",
+      "!**/*.db-journal",
+      "!**/*.db-shm",
+      "!**/*.db-wal",
+      "!**/*.sqlite",
+      "!**/*.sqlite3"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  }
+}

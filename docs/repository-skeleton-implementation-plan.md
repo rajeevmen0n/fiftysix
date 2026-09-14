@@ -132,7 +132,7 @@ a duplicate.
 
 ---
 
-### [ ] S001: Establish the reproducible workspace and package graph
+### [x] S001: Establish the reproducible workspace and package graph
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -179,36 +179,36 @@ a duplicate.
 }
 ```
 
-- [ ] Pin the flake's only input to `github:NixOS/nixpkgs/nixos-26.05`; enumerate
+- [x] Pin the flake's only input to `github:NixOS/nixpkgs/nixos-26.05`; enumerate
   `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin` with a local helper rather than
   flake-utils. Expose the initial `packages.default` from `nix/package.nix` and create a default
   shell containing Node 24, pnpm 11 bound to Node 24, SQLite, Biome, Python, a C/C++ toolchain,
   `pkg-config`, and `nixfmt`.
-- [ ] Define a private pnpm workspace for `packages/*` and `apps/*`. Set `packageManager` to the
+- [x] Define a private pnpm workspace for `packages/*` and `apps/*`. Set `packageManager` to the
   exact pnpm 11 version supplied by the pinned nixpkgs, require that version to be at least
   11.5.3, require Node `>=24 <25`, and add only the
   dependencies selected for skeleton work: TypeScript/build tooling at the root; no engine
   dependency; Zod in protocol; Hono/Node WebSocket/Kysely/SQLite/pino/Zod in server; and
   React/React DOM/React Router/Zustand/i18next/react-i18next in web.
-- [ ] Configure TypeScript with `strict`, `noUncheckedIndexedAccess`, `noEmit`, modern ESM,
+- [x] Configure TypeScript with `strict`, `noUncheckedIndexedAccess`, `noEmit`, modern ESM,
   `verbatimModuleSyntax`, and package-specific libraries/types. Give engine only ES library types;
   protocol receives ES types; server receives ES and Node types; web receives ES and DOM types.
-- [ ] Add package exports and workspace references so server can import engine and protocol,
+- [x] Add package exports and workspace references so server can import engine and protocol,
   protocol can type-import engine, and web can type-import protocol. Add empty typed exports for
   engine/protocol and minimal compile-only server/web entries without application behavior.
-- [ ] Configure esbuild to emit `dist/server/server.js` and Vite to emit `dist/web`. Configure
+- [x] Configure esbuild to emit `dist/server/server.js` and Vite to emit `dist/web`. Configure
   Vite's development proxy for `/api` and WebSocket `/ws` to `http://127.0.0.1:8056`.
-- [ ] Configure Biome for the repository and ignore generated output, dependency directories,
+- [x] Configure Biome for the repository and ignore generated output, dependency directories,
   SQLite files, and local environment artifacts in both Biome and `.gitignore` as appropriate.
-- [ ] Create `nix/package.nix` with `fetchPnpmDeps`, `pnpmConfigHook`, pnpm 11, Node 24, SQLite,
+- [x] Create `nix/package.nix` with `fetchPnpmDeps`, `pnpmConfigHook`, pnpm 11, Node 24, SQLite,
   and native compilation inputs. Force `better-sqlite3` to build from source against nixpkgs'
   SQLite, run `pnpm build`, and install the current server bundle, web tree, required native
   runtime dependency, and `$out/bin/fiftysix` wrapper. Use `lib.fakeHash` only to obtain the
   dependency hash, replace it with the reported hash before review, and require no `fakeHash` in
   `nix/package.nix` when committing.
-- [ ] Generate the lockfiles from inside the dev shell. Run `nix develop -c pnpm typecheck`,
+- [x] Generate the lockfiles from inside the dev shell. Run `nix develop -c pnpm typecheck`,
   `nix develop -c pnpm lint`, `nix develop -c pnpm build`, and `nix build`; require exit 0.
-- [ ] Inspect `pnpm why` output to confirm engine has no dependencies, inspect emitted bundles to
+- [x] Inspect `pnpm why` output to confirm engine has no dependencies, inspect emitted bundles to
   confirm the server does not bundle `better-sqlite3`, run `git diff --check`, update plan/progress,
   and commit `build: establish reproducible workspace`.
 

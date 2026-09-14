@@ -1,2 +1,17 @@
 .superpowers/
 .worktrees/
+.direnv/
+.env
+.env.*
+!.env.example
+.pnpm-store/
+node_modules/
+dist/
+result
+result-*
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3

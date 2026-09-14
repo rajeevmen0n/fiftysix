@@ -1,0 +1,22 @@
+{
+  "name": "@fiftysix/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsx esbuild.config.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fiftysix/engine": "workspace:*",
+    "@fiftysix/protocol": "workspace:*",
+    "@hono/node-server": "^1.19.7",
+    "@hono/node-ws": "^1.2.0",
+    "better-sqlite3": "^12.4.1",
+    "hono": "^4.10.7",
+    "kysely": "^0.28.8",
+    "pino": "^10.1.0",
+    "zod": "^4.1.13"
+  }
+}

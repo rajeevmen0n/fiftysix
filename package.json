@@ -1,0 +1,31 @@
+{
+  "name": "fiftysix",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11.5.3 <12"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names server,web 'pnpm --filter @fiftysix/server dev' 'pnpm --filter @fiftysix/web dev'",
+    "build": "pnpm --filter @fiftysix/server build && pnpm --filter @fiftysix/web build",
+    "start": "node dist/server/server.js",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "esbuild": "^0.27.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
+  }
+}
