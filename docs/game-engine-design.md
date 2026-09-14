@@ -91,7 +91,7 @@ auctions and hidden trump live in their own modules.
 | `playerCount` | 56: 4, 6, 8. 28: 4. |
 | `includeEightsAndSevens` | 56 only |
 | `illegalPlayMode` | `block` or `autoStop` |
-| `startingTokens` | Positive whole number |
+| `startingTokens` | Whole number from 1 through 999 |
 | `stakeTiers` | List of `{fromBid, toBid, winStake, lossStake}` |
 | `redealThreshold` | Points at or below which a hand forces a redeal |
 | `surrenderOption` | `off` or `on` |
@@ -100,7 +100,9 @@ auctions and hidden trump live in their own modules.
 - a player count not allowed for the game type
 - 8s and 7s with a player count they don't divide evenly into (rules §3)
 - stake tiers with gaps, overlaps, or not covering the whole bid range (56: 28–56, 28: 14–28)
-- a starting token count that isn't positive
+- a starting token count or stake value that isn't a whole number from 1 through 999
+- a redeal threshold that isn't a whole number from zero through the cap for that game/player
+  count (56: 13/8/6 for 4/6/8 players; 28: 6)
 
 ## 6. State
 
@@ -111,7 +113,7 @@ data that can be saved as JSON.
 - `config`
 - `tokens`: balance for Team A and Team B
 - `dealer`: the current dealer's seat
-- `matchLog`: one summary per match in this session (§10.3)
+- `matchLog`: one summary per persistently logged result in this session (§10.3)
 - `pastSessions`: the winner and final tokens of each earlier session in the room
 - `phase`: one of the phases in §6.2
 
@@ -169,8 +171,9 @@ data that can be saved as JSON.
   `undealt`. The second deal uses the same order.
 
 ### 7.1 Redeal check (rules §9)
-- A redeal happens if **one team holds no Jack**, or **any hand is worth the
-  `redealThreshold` or less**.
+- A redeal happens if **one team holds no Jack**, or **any complete holding is worth the
+  `redealThreshold` or less**. In 28, the complete holding includes the face-down card as part
+  of its owner's eight cards for both checks even though it isn't in that player's hand.
 - **56**: checked after the deal. **28**: checked after the second deal (all 8 cards).
 - On a redeal: events `redealt(reason)` and `matchEnded` with outcome `redealt`. All bids, both
   auctions and the face-down card are cancelled. The phase becomes `awaitingDeal(redeal)` with
@@ -221,7 +224,9 @@ Checked after every call:
   **forced bid**: 28 no trump in 56, 14 no trump in 28. Event `forcedBid(seat, amount)`.
 - **Redouble**: ends at once (§8.2).
 - **28 second auction with no new bid**: after **N passes**, the carried bid, its double status
-  and its face-down card all stand.
+  and its face-down card all stand. This full initial circuit is an exception to the usual
+  doubled-auction termination: a double carried from the first auction doesn't end the second
+  auction early when the turn first reaches its original doubler.
 - On end: event `auctionEnded(contract)`.
 
 ### 8.4 28: face-down card and second deal (rules §10.2)
@@ -385,13 +390,22 @@ and the face-down card stays hidden.
   | awarded to the defenders | bidding team | loss |
 - A team pays what it owes, or everything it has if that's less. The other team receives the
   same amount. Balances never go below 0.
-- **Match summary**, added to `matchLog` and sent in `matchEnded(summary)`:
+- **Match summary**, sent in `matchEnded(summary)`:
   - dealer
-  - contract (bidder, amount, trump, bid style, multiplier, forced)
+  - nullable summary contract (bidder, amount, public trump state, bid style, multiplier, forced);
+    it is null when a restart occurs before any contract exists, and an unrevealed 28 trump is
+    stored only as `hidden` without its suit or face-down card
   - points per team
   - tokens moved and running tokens
   - outcome: `made`, `failed`, `disqualified(seat, kind)`, `surrendered(team)`,
     `awarded(team)`, `restarted` or `redealt(reason)`
+
+  Scored outcomes and every host restart are appended to `matchLog`. A 56 automatic redeal is
+  emitted for its transient notice but isn't appended. A 28 automatic redeal is appended because
+  its first auction already occurred; its summary contains the public first-auction facts and
+  zero token movement. Canonical summaries erase the unrevealed suit/card rather than relying only
+  on view redaction. This prevents a later occupant of the old bidder's seat from learning it
+  after players move.
 
 ### 10.4 Session flow
 - **After a scored match** (made, failed, disqualified, surrendered, awarded):
@@ -400,7 +414,9 @@ and the face-down card stays hidden.
 - **`startNextMatch`** (system, sent after everyone taps Ready): `dealer` becomes
   `dealer + 1`, event `nextMatchStarted(dealer)`, phase `awaitingDeal(nextMatch)`.
 - **Redeal and restart** skip `matchOver` and go straight to `awaitingDeal` with the same
-  dealer.
+  dealer. The engine remains pure and waits for the service to supply the next deck. The service
+  persists and broadcasts the result before enqueueing that same-dealer deal; no Ready gate is
+  required.
 - **`restartSession(firstDealer)`** (system, from `sessionOver`):
   - the winner and final tokens are added to `pastSessions`
   - tokens reset to `startingTokens`, `matchLog` is cleared, `dealer` is `firstDealer`
@@ -433,6 +449,10 @@ queue plays them in order (design §12.6), and /debug shows them in its event lo
 - `resultDecided`: sent only to seats on the losing team.
 - All other events are public.
 
+Match summaries nested in events already contain only a summary contract. Finishing a match
+removes an unrevealed 28 suit/card before the canonical summary is recorded or projected,
+including for the bidder.
+
 ### 11.3 Views
 `view(state, viewer, viewSettings)`:
 - **Public (every viewer, including the Table view)**:
@@ -445,7 +465,8 @@ queue plays them in order (design §12.6), and /debug shows them in its event lo
   - finished rounds, per round history: none, the last one, or all
   - points per team, only when live points are on
   - surrender vote status (proposer and votes so far)
-  - `matchLog`, `pastSessions`, and the match or session summary
+  - recipient-safe public match summaries in `matchLog`, `pastSessions`, and the match or session
+    summary; contracts may be absent, and an unrevealed 28 trump is never projected
 - **For a seat only**:
   - its own hand
   - its own face-down card, face up and separate from the hand

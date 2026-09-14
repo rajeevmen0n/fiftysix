@@ -15,7 +15,8 @@ bundled beside the Vite output so the same process serves HTTP, WebSocket, and t
 the toolchain, builds the lockfile-controlled dependency graph, packages the native SQLite
 module, and exposes the hardened NixOS service.
 
-**Tech Stack:** TypeScript (`strict`, `noUncheckedIndexedAccess`), Node.js 24, pnpm 11, Biome,
+**Tech Stack:** TypeScript (`strict`, `noUncheckedIndexedAccess`), Node.js 24, security-fixed pnpm
+11 (at least 11.5.3), Biome,
 Hono, `@hono/node-ws`, Zod, Kysely, `better-sqlite3`, pino, React 19, Vite, React Router,
 Zustand, i18next, esbuild, Nixpkgs 26.05.
 
@@ -40,7 +41,9 @@ Zustand, i18next, esbuild, Nixpkgs 26.05.
 - Run project commands through `nix develop -c`, except `nix build`, `nix run`, and
   `nix flake check`.
 - Pin `nixpkgs` to the stable `nixos-26.05` branch in `flake.lock`. Use `nodejs_24` and a pnpm 11
-  package bound to that Node version in both the shell and package build.
+  package bound to that Node version in both the shell and package build. The readiness audit on
+  2026-09-14 observed Node 24.19.0 and pnpm 11.25.0 in that channel; fail S001 if the selected pin
+  resolves pnpm below 11.5.3.
 - `packages/engine` has no dependencies and compiles without Node or DOM types.
 - `packages/protocol` owns network types and Zod schemas. `apps/web` may import protocol types
   only and never imports runtime code from protocol, engine, or server.
@@ -182,7 +185,8 @@ a duplicate.
   shell containing Node 24, pnpm 11 bound to Node 24, SQLite, Biome, Python, a C/C++ toolchain,
   `pkg-config`, and `nixfmt`.
 - [ ] Define a private pnpm workspace for `packages/*` and `apps/*`. Set `packageManager` to the
-  exact pnpm 11 version supplied by the pinned nixpkgs, require Node `>=24 <25`, and add only the
+  exact pnpm 11 version supplied by the pinned nixpkgs, require that version to be at least
+  11.5.3, require Node `>=24 <25`, and add only the
   dependencies selected for skeleton work: TypeScript/build tooling at the root; no engine
   dependency; Zod in protocol; Hono/Node WebSocket/Kysely/SQLite/pino/Zod in server; and
   React/React DOM/React Router/Zustand/i18next/react-i18next in web.
@@ -518,15 +522,23 @@ export async function startServer(config: AppConfig): Promise<RunningServer>;
   and maps startup failure to a nonzero exit without logging secrets.
 - [ ] In production, serve hashed/static files from the web directory placed beside the server
   bundle. Return `index.html` as the fallback only for non-API, non-WebSocket `GET`/`HEAD` routes;
-  preserve real 404/method responses for `/api/*`, `/healthz`, and `/ws`.
+  preserve real 404/method responses for `/api/*`, `/healthz`, `/ws`, and the reserved `/debug`
+  path. U026 conditionally enables the `/debug` SPA fallback with the debug service.
+- [ ] Add the production security headers from the tech-stack spec: same-origin CSP with no inline
+  script, inline style attributes allowed only for Motion/CSS variables, no object/embed target,
+  frame denial, `nosniff`, `no-referrer`, and restrictive browser permissions. Do not set HSTS in
+  the app. Revalidate the SPA shell and cache content-hashed assets as immutable.
 - [ ] Implement a shutdown coordinator that is idempotent and closes in order: stop accepting
   HTTP/upgrades, close registered sockets, stop schedulers, wait for registered future service
   drains, then close storage. Have both `SIGTERM` and `SIGINT` await the same path; a second signal
   may force process exit.
 - [ ] Run the built server against an explicit temporary SQLite file. Verify `/`, one asset, an
-  arbitrary client route, `/healthz`, an unknown `/api` route, and `/ws`. Send SIGTERM during an
-  open WebSocket, require the socket and process to close cleanly, and confirm the migration
-  record persists.
+  arbitrary client route, `/healthz`, an unknown `/api` route, the reserved `/debug` 404, and
+  `/ws`. Send SIGTERM during an open WebSocket, require the socket and process to close cleanly,
+  and confirm the migration record persists.
+- [ ] Inspect production responses to require the security headers, shell/asset cache policy, and
+  a CSP that still permits same-origin WebSocket use, generated QR images, Motion transforms, and
+  calculated CSS-variable styles.
 - [ ] Run typecheck, lint, build, `nix build`, and `git diff --check`; require success. Verify
   `node dist/server/server.js` and the current Nix wrapper serve identical web/health behavior,
   then update plan/progress and commit `feat(server): serve and shut down application`.
@@ -598,7 +610,7 @@ services.fiftysix = {
 
 ---
 
-### [ ] S009: Verify the integrated skeleton and hand off to engine planning
+### [ ] S009: Verify the integrated skeleton and hand off to engine implementation
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -610,15 +622,15 @@ services.fiftysix = {
 **Depends on:** S001–S008 complete.
 
 **Interfaces produced:** No new runtime interface. This unit produces verified application and
-deployment foundations plus the durable handoff to the pure-engine planning track.
+deployment foundations plus the durable handoff to the already-approved pure-engine plan.
 
 ```text
 Required smoke matrix:
 workspace dependency boundaries; config defaults and invalid startup; migration first run and
 idempotent rerun; healthy and failed storage health checks; WebSocket origin/size/order/schema/
 unknown-token handling; browser connect and reconnect; production static asset and SPA fallback;
-SIGTERM with an open socket; nix build/run/check; NixOS defaults, overrides, firewall, credentials,
-and hardening.
+reserved /debug 404; SIGTERM with an open socket; nix build/run/check; NixOS defaults, overrides,
+firewall, credentials, and hardening.
 ```
 
 - [ ] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and
@@ -633,8 +645,8 @@ and hardening.
   hard-coded JSX strings; no usable tokens, secret contents, dummy domain tables, fake hash in
   Nix source, or generated database/build artifacts.
 - [ ] Update `AGENTS.md` from planned to actual layout and run behavior without duplicating
-  detailed specs. Mark this unit and the repository-skeleton track complete, set pure-engine plan
-  authoring as the next action, and leave rooms blocked on the still-missing engine only.
+  detailed specs. Mark this unit and the repository-skeleton track complete, set E001 as the next
+  action, and leave rooms blocked on the still-missing engine only.
 - [ ] Run `git status --short` and `git diff --check`, review every final documentation change,
-  and commit `docs: complete repository skeleton`. Stop and ask the user before planning or
-  implementing the engine.
+  and commit `docs: complete repository skeleton`. Stop and ask the user before implementing
+  E001.

@@ -53,9 +53,11 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
   record the exact blocker and partial commit state in the ledger, and make the next unit smaller.
 
 ## Tech stack
-Chosen in the [tech stack spec](docs/tech-stack-design.md). The code
-doesn't exist yet: it's built in the order listed in that spec's §9, starting with the skeleton.
-Update this section when that changes.
+Chosen in the [tech stack spec](docs/tech-stack-design.md). The code doesn't exist yet. All v1
+designs and implementation plans are approved; implementation starts with S001 in
+[the repository-skeleton plan](docs/repository-skeleton-implementation-plan.md), then proceeds
+strictly through engine, rooms, and UI/debug as recorded in
+[the progress ledger](docs/implementation-progress.md). Update this section when that changes.
 
 - **TypeScript** everywhere (`strict`, `noUncheckedIndexedAccess`), **Node.js 24**, **pnpm**
   workspaces, **Biome** for lint and format.

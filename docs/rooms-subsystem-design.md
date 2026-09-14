@@ -36,6 +36,7 @@ contains:
 - numbered seats mapped to identities
 - readiness, the selected first dealer and the host identity
 - pending host-transfer and PIN-lockout state
+- each player's last accepted reaction time
 - the service-level room phase and either pure engine state or pending initial-session setup
 
 The room snapshot is the recovery authority. A sequenced update journal is written beside it for
@@ -88,8 +89,11 @@ Each identity has:
 - last occupied seat or `null`
 - Ready state
 
-Names are trimmed, Unicode-normalized and compared case-insensitively. The normalized name is
-unique within a room.
+Names are trimmed, NFKC Unicode-normalized and compared case-insensitively. They contain 1–24
+user-perceived characters after normalization. The network schema first applies a conservative
+1,024-byte UTF-8 encoded-length bound; the domain service performs the authoritative grapheme
+count. Names reject NUL, ASCII control characters, and Unicode line/paragraph separators while
+preserving ordinary script joiners. The normalized name is unique within a room.
 
 A new identity always enters unseated, including a new replacement joining during a stalled
 match. It chooses an empty seat after joining. Until seated, it receives public room information
@@ -105,6 +109,9 @@ movement rules apply after rejoin.
 There is one active WebSocket connection per player identity. A new successful `hello` for the
 same identity replaces the older socket, which receives `signed_in_elsewhere` before closing.
 
+The browser stores player and Table tokens under separate scope-specific, versioned keys for each
+room. Opening one role therefore never overwrites the other role's credential.
+
 ### 3.3 Name-and-PIN rejoin
 
 A different browser may rejoin by submitting the same normalized name and four-digit PIN. On
@@ -115,8 +122,10 @@ If the identity has no PIN, rejoining from another browser is rejected. Five wro
 lock PIN rejoin for that identity for one minute. Attempt count and lock expiry are persisted and
 use the injected clock.
 
-PINs use a slow salted password hash. Access tokens contain a non-secret selector and a random
-secret; storage keeps the selector and a salted digest, never the usable token.
+PINs use Node scrypt with fixed reviewed parameters (`N=16384`, `r=8`, `p=1`, 32-byte output) and
+a fresh 16-byte salt. Access tokens contain an independently random 16-byte selector and 32-byte
+secret. Storage keeps the selector plus a salted SHA-256 digest and compares digests in constant
+time; it never stores the usable token.
 
 ### 3.4 Intentional departure and removal
 
@@ -216,7 +225,16 @@ If several seats are missing, the stall continues until all are restored. Before
 matches, a missing connection blocks the automatic readiness gate instead of creating a distinct
 engine stall.
 
-### 5.2 Automatic host transfer
+### 5.2 Reactions
+
+The protocol carries only these stable reaction IDs: `hello`, `nice`, `wellPlayed`, `wow`,
+`oops`, `oneMoment`, and `thanks`. Labels and emoji are localized by the client; arbitrary text
+never reaches a room event. A player may have one accepted reaction per 2,000 ms. The room
+snapshot stores the last accepted time and the service checks it with the injected clock, so a
+restart cannot bypass the cooldown. Reactions remain available during a stall and never change
+engine state.
+
+### 5.3 Automatic host transfer
 
 A host disconnect starts the room's configured transfer delay. Rejoining before the committed
 deadline cancels the pending transfer. Otherwise, the timer callback enters the same serial room
@@ -294,6 +312,11 @@ Every HTTP body and WebSocket message has a Zod schema in `packages/protocol`.
 
 ### 7.1 HTTP operations
 
+Every JSON request body is limited to 65,536 UTF-8 bytes before parsing. Room settings enforce
+the numeric limits from `design.md` and the game/player-specific redeal cap from `rules.md`.
+Room-code generation makes at most 32 unique-code attempts before returning a safe temporary
+failure.
+
 | Operation | Request | Result |
 |---|---|---|
 | `POST /api/rooms` | room settings, host name, optional player PIN | room code and player token |
@@ -314,7 +337,7 @@ The first message is `{type: "hello", token}`. After acceptance, mutations use
 - `setFirstDealer(seat)`
 - `removePlayer(player)` and `transferHost(player)`
 - `engineAction(action)`
-- `sendReaction(reaction)`
+- `sendReaction(reaction)`, where `reaction` is one of the seven stable IDs in §5.2
 - `restartSession`
 - `leaveRoom`
 
@@ -397,6 +420,12 @@ Each command follows this path:
 10. Replace the in-memory snapshot.
 11. Redact events and build a fresh view for every recipient, then broadcast.
 
+A committed engine transition that ends in `awaitingDeal(redeal)` or
+`awaitingDeal(restart)` schedules a separate system transition through the same queue. It
+supplies a newly shuffled deck for the same dealer without consulting the Ready gate. The prior
+result is therefore durable and visible before another deal is attempted. Repeated redeals each
+commit separately.
+
 The final Ready command may therefore produce readiness, session-start and deal events in one
 transaction. A replacement's Ready command may produce readiness and stall-ended events without
 altering the engine match.
@@ -410,7 +439,8 @@ Stable room rejection codes include:
 - `seat_occupied`, `not_seated`, `seat_change_not_allowed`
 - `not_readyable`, `player_disconnected`, `room_not_ready`
 - `not_host`, `player_not_removable`, `invalid_host_target`
-- `match_stalled`, `action_not_allowed`
+- `match_stalled`, `action_not_allowed`, `reaction_rate_limited`, `request_too_large`
+- `room_code_generation_failed`
 
 Engine rejection codes pass through unchanged inside the protocol's engine-rejection variant.
 Responses do not reveal whether a different identity's PIN exists or any private engine state.

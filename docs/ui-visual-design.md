@@ -83,6 +83,9 @@ also used as the sole success/error signal.
 - Court portraits, card-back art, logo/app icons, and any raster texture are generated with the
   Gemini MCP under the asset and prompt-recording rules in AGENTS.md. No stock or placeholder
   image enters production.
+- The generated `56` mark appears on the entry experience, and the generated app icon is wired to
+  the browser document metadata. Generated assets aren't accepted merely because they exist in
+  the repository; every asset has a declared production use.
 
 ## 3. Responsive layout system
 
@@ -202,6 +205,10 @@ or confirmation that would change the selected room mode.
 4. Screens and components render the displayed view and the server-provided allowed actions.
 5. When the queue completes, the displayed view equals the latest authoritative view.
 
+Within one update, presentation-only animation identities are derived from room revision plus
+the event's zero-based index. They are stable without adding client authority or exposing an
+internal event ID.
+
 The UI never derives hidden information or reimplements legality. A rejected command unlocks its
 control and shows a translated explanation. A reconnect, hidden-tab return, or excessive backlog
 skips animation and replaces the displayed view with the newest full view.
@@ -232,6 +239,9 @@ relevant field, and preserve valid entries after rejection.
 Successful player creation/joining navigates to `/room/:code`; successful Table authorization
 navigates to `/table/:code`.
 
+Player and Table credentials use separate scope-specific storage keys, so both routes can remain
+open for the same room in one browser.
+
 Create starts with the required basic settings. Advanced settings are collapsed and summarise any
 non-default choices when closed. Choices that are impossible for the selected game/player count
 are removed or disabled with an explanation.
@@ -249,11 +259,20 @@ Play uses the stable shell in §3 and dock in §5. A match summary overlays the 
 players retain context, then exposes Ready. A session win gets a dedicated screen with the final
 session log and the host's Restart session action.
 
+Summary components accept nullable, already-redacted contracts. They never infer or reveal a 28
+trump that remained hidden when the match ended. Every automatic redeal uses only its transient
+notice; the later log entry for a 28 redeal may show public first-auction facts.
+
 ### 9.4 Debug
 
-`/debug` reuses production game components. Its debug bar is visually unmistakable and remains
+When disabled, `/debug` is a normal server 404 and does not load the SPA. When enabled, its only
+unauthenticated content is the password login. After authentication, `/debug` reuses production
+game components. Its debug bar is visually unmistakable and remains
 outside the game surface. Acting as a seat, switching the viewed seat, showing all hands, viewing
 events, and restarting from the same seed never leak into production room components.
+
+The login surface handles the process-local five-failure/one-minute source lockout. Its in-memory
+authorization expires after eight idle hours and after every server restart.
 
 ## 10. Overlays, errors, and recovery
 
@@ -298,6 +317,7 @@ Manual responsive checks cover:
 - TV-sized Table view
 - 4-, 6-, and 8-seat 56 tables and the 4-seat 28 table
 - smallest and largest hands, including sixteen cards
+- maximum configured stakes and four-digit token balances after transfers
 - long valid player names and translated-text expansion
 - every auction, placement, play, pause, summary, and session state
 - reconnection, removal, replacement, and host-control states
@@ -309,8 +329,8 @@ may be introduced only in a later user-approved implementation unit.
 
 ## 13. Implementation decomposition
 
-The UI is too broad for one safe implementation unit. Its later implementation plan should split
-work in this order:
+The UI is too broad for one safe implementation unit. The approved
+[UI implementation plan](ui-visual-implementation-plan.md) splits work in this order:
 
 1. theme tokens, fonts, generated art, card primitives, and responsive layout utilities
 2. shared table, seat, status, hand, and action-dock components

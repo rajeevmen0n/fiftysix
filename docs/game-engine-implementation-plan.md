@@ -146,8 +146,9 @@ export function stakeFor(config: EngineConfig, amount: number): StakeTier;
 - [ ] Implement counter-clockwise seat helpers with even seats on Team A and odd seats on Team B.
   Reject out-of-range/non-integer seats at public boundaries rather than normalizing them.
 - [ ] Validate every config rule: game/player-count combinations; 28 requiring eights/sevens;
-  56 card divisibility; positive whole starting tokens; nonnegative whole redeal threshold; and
-  positive whole, ordered, gap-free, non-overlapping stake tiers covering exactly 28–56 or 14–28.
+  56 card divisibility; starting tokens and every stake as whole numbers from 1–999; redeal
+  threshold from zero through the game/player cap (56: 13/8/6 for 4/6/8 players; 28: 6); and
+  ordered, gap-free, non-overlapping stake tiers covering exactly 28–56 or 14–28.
 - [ ] Implement tier lookup, multiplier application, affordability predicates for bid/double/
   redouble, and capped token transfer that never produces a negative balance.
 - [ ] Run deterministic one-off checks for all valid deck sizes/configurations, total points,
@@ -215,9 +216,10 @@ export function act(state: EngineState, action: EngineAction): ActionResult;
 ```
 
 - [ ] Define JSON-safe session, phase, match, auction, contract, hand, round, surrender,
-  match-summary, and past-session types matching design §6. Use discriminated unions for every
-  phase and outcome; use arrays indexed by validated seat and explicit `{A, B}` token/point
-  records.
+  match-summary, and past-session types matching design §6. Match-summary contracts are nullable
+  for pre-contract restarts/redeals and use a distinct summary-contract type whose hidden-trump
+  variant contains no suit/card. Use discriminated unions for every phase and outcome; use arrays
+  indexed by validated seat and explicit `{A, B}` token/point records.
 - [ ] Define the complete action, event, rejection, redeal-reason, disqualification, and outcome
   unions from design §§7–11. Rejection details may contain safe expected ranges/seats/kinds but
   never hidden cards or full state.
@@ -260,7 +262,7 @@ export function dealCards(deck: readonly Card[], dealer: Seat, playerCount: numb
 export type RedealReason =
   | {type: "teamWithoutJack"; team: Team}
   | {type: "lowHand"; seat: Seat; points: number};
-export function redealReason(hands: readonly (readonly Card[])[], threshold: number): RedealReason | null;
+export function redealReason(holdings: readonly (readonly Card[])[], threshold: number): RedealReason | null;
 ```
 
 - [ ] Validate exact multiset equality with `buildDeck(config)`: reject missing, duplicate,
@@ -270,7 +272,8 @@ export function redealReason(hands: readonly (readonly Card[])[], threshold: num
   seat in ordered `undealt` storage.
 - [ ] After a 56 deal, check team-without-Jack first and then low hands in seat order for a stable
   redeal reason. Emit `dealt`, then `redealt(reason)` and `matchEnded(redealt)` when applicable;
-  keep the same dealer, move no tokens, and return to `awaitingDeal(redeal)`.
+  keep the same dealer, move no tokens, return to `awaitingDeal(redeal)`, and do not append the
+  transient 56 redeal to `matchLog`.
 - [ ] When 56 does not redeal, create the match state and emit `auctionStarted(56, dealer + 1,
   28)`. For 28, emit the first-stage deal and `auctionStarted(28-first, dealer + 1, 14)` without a
   redeal check until the second four cards are dealt.
@@ -356,14 +359,17 @@ export function faceDownIsForced(state: EngineState, seat: Seat): boolean;
 - [ ] Accept `placeCard` only from the winner and only for a card in that seat's hand. Remove it,
   store owner/card with hidden trump, emit `cardPlaced`, then emit the automatic second-stage deal
   from `undealt` in the original order; no second system action exists.
-- [ ] After all eight cards per seat are present, run the same stable redeal check. A redeal
-  returns the face-down card, cancels both auction histories/contract state, logs redeal with no
-  token movement, and keeps the dealer.
+- [ ] After all eight cards per seat are present, run the same stable redeal check over complete
+  holdings: include the face-down card in its owner's points and team-Jack membership. A redeal
+  returns the face-down card, cancels both auction histories/contract state, logs the public
+  first-auction facts with no token movement, and keeps the dealer.
 - [ ] Unless the first auction was redoubled, begin `28-second` at dealer + 1 with minimum 21 or
   carried amount + 1. Give every seat a turn. Preserve a carried double, allow its redouble, and
   cancel it on any new bid.
-- [ ] After N passes with no new second-auction bid, keep the bidder, amount, multiplier, and
-  face-down card. A carried forced 14 becomes no trump. When there is a new winner—including a
+- [ ] Give all four seats one call in the initial second-auction circuit even when a double
+  carried over; reaching the original doubler does not end that circuit. After N passes with no
+  new second-auction bid, keep the bidder, amount, multiplier, and face-down card. A carried
+  forced 14 becomes no trump. When there is a new winner—including a
   self-raise—emit `faceDownReturned`, restore the old card, and require the new winner to place
   any card before play.
 - [ ] If the first auction was redoubled, skip the second auction after deal/redeal checking and
@@ -408,8 +414,11 @@ export function decideSessionAction(state: EngineState, action: EngineAction): D
 - [ ] Calculate win/loss tier stake times multiplier and choose the payer exactly from design
   §10.3 for made, failed, disqualified, surrendered, and awarded outcomes. Transfer no more than
   the payer owns and record actual movement plus running balances.
-- [ ] Build complete match summaries with dealer, public contract facts, points, token movement,
-  balances, and the tagged outcome. Append one summary to `matchLog` and emit `matchEnded`.
+- [ ] Build complete match summaries with dealer, nullable summary contract, points, token
+  movement, balances, and the tagged outcome. Before emitting or storing a summary, replace an
+  unrevealed 28 trump with `hidden` and retain neither its suit nor card. Append scored outcomes,
+  every host restart, and 28 redeals to `matchLog`; do not append 56 automatic redeals. Emit
+  `matchEnded` for every result so transient presentation remains possible.
 - [ ] Accept host `endMatch(restart)` during auction, placement, play, or a vote; cancel match
   state/vote, move no tokens, log `restarted`, keep dealer, and enter `awaitingDeal(restart)`.
   Accept award only after play starts, including during a vote, and score the named winner.
@@ -532,6 +541,7 @@ export function decideSurrenderAction(state: EngineState, action: EngineAction):
 export type Viewer = {type: "seat"; seat: Seat} | {type: "table"};
 export interface ViewSettings {roundHistory: "none" | "last" | "full"; livePoints: boolean;}
 export interface AllowedHostActions {restart: boolean; awardTeams: Team[];}
+export type PublicMatchSummary = MatchSummary;
 export type AllowedEngineAction =
   | {type: "bid"; range: BidRange; suits: readonly (Suit | "noTrump")[]; styles: readonly ("numberFirst" | "suitFirst")[]}
   | {type: "pass"} | {type: "double"} | {type: "redouble"}
@@ -558,7 +568,7 @@ export interface EngineView {
   rounds: readonly PublicRound[];
   points: Readonly<Record<Team, number>> | null;
   surrender: PublicSurrender | null;
-  matchLog: readonly MatchSummary[];
+  matchLog: readonly PublicMatchSummary[];
   pastSessions: readonly PastSessionSummary[];
   viewer:
     | {type: "table"}
@@ -588,10 +598,12 @@ export function redactEvent(
   and past sessions. Apply none/last/full round history and live-points settings.
 - [ ] Add only the viewer seat's hand, face-down card, capabilities, and losing-team certainty.
   Table receives no hand, hidden trump, undealt cards, or allowed seat action. Hide 28 trump from
-  every non-bidder until reveal.
+  every non-bidder until reveal. If the match ends first, omit it from every recipient's summary,
+  including the bidder's, so later seat movement cannot expose historical private state.
 - [ ] Redact deals to own cards plus other counts (counts only for Table), face-down placement/
   return to owner only, hidden contract trump to bidder only, round points when live points is
-  off, and result certainty to losing seats only. Preserve order by allowing `null` redactions.
+  off, and result certainty to losing seats only. Assert that canonical nested match summaries
+  already contain no unrevealed 28 suit/card. Preserve order by allowing `null` redactions.
 - [ ] For representative state in every phase, compare each listed capability with `decide`,
   inspect every seat/Table view and event variant for forbidden cards/trump, and confirm view/
   redaction never mutate full state.
@@ -637,8 +649,8 @@ dealer rotation; session restart; every viewer/settings combination; full event 
 - [ ] Inspect the dependency/import graph and emitted server bundle: require zero engine package
   dependencies and no Node/browser/protocol/server/storage/network/time/random/logger imports.
 - [ ] Update `AGENTS.md` with the actual engine module/export layout, mark this plan and engine
-  track complete, and update rooms to ready with its Task 1 as next only after the skeleton is
-  also complete.
+  track complete, and update rooms to ready with R001 as next only after the skeleton is also
+  complete.
 - [ ] Run `git status --short` and `git diff --check`, review all final documentation changes,
   and commit `docs: complete game engine`. Stop and ask the user before starting rooms or UI
   implementation.

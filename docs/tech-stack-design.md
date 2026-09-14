@@ -25,7 +25,7 @@ builds on [AGENTS.md](../AGENTS.md) (engineering conventions),
 |---|---|
 | Language | TypeScript everywhere, `strict` plus `noUncheckedIndexedAccess` |
 | Runtime | Node.js 24 LTS |
-| Package manager | pnpm workspaces |
+| Package manager | pnpm 11 workspaces; require security-fixed pnpm ≥11.5.3 |
 | Lint and format | Biome |
 | Server HTTP | Hono on `@hono/node-server` |
 | WebSocket | `@hono/node-ws` (`ws`) |
@@ -96,14 +96,17 @@ locales/
   - HTTP routes under `/api/…` for actions before a player is in a room: create room, join,
     open Table view, /debug login. Each returns a session token.
   - the WebSocket at `/ws`
-  - the built web app, with a fallback to the app's page for client routes such as `/` and
-    `/debug`
+  - the built web app, with a fallback to the app's page for client routes such as `/`; `/debug`
+    receives that fallback only when `DEBUG_PASSWORD_FILE` enables the debug service and is a
+    normal 404 otherwise
 - **WebSocket connection**:
   - The first message is `hello(token)`. The token is never put in a URL, so it doesn't appear
     in proxy logs.
   - If `ALLOWED_ORIGINS` is set, connections from other origins are refused. If unset, any
     origin is accepted.
   - Messages have a size limit.
+- HTTP JSON bodies and WebSocket messages are both limited to 65,536 UTF-8 bytes before schema
+  parsing.
 - **Validation**: every incoming HTTP body and WebSocket message is parsed with its `protocol`
   Zod schema. An invalid message gets an error reply and never reaches a service.
 - **Handlers are thin** (AGENTS.md): parse, call a service, send the result.
@@ -114,6 +117,13 @@ locales/
     `{type: "rejected", code, details}`, `{type: "error", code}`
   - The full room message list is designed with the rooms subsystem.
 - **No CORS setup** is needed: the web app is served from the same origin as the API.
+- Production responses set a restrictive Content Security Policy: scripts/fonts/default content
+  come from the same origin; connections use the app's HTTP/WebSocket origin; images may also use
+  `data:`/`blob:` for generated QR or local presentation; objects, embedding, and foreign form
+  targets are disabled. Inline script is forbidden. Inline style attributes remain allowed only
+  because Motion and calculated CSS variables require them. Also set `X-Content-Type-Options:
+  nosniff`, `Referrer-Policy: no-referrer`, and a restrictive `Permissions-Policy`. TLS/HSTS
+  remains the reverse proxy's responsibility.
 
 ### 4.2 Rooms at runtime
 - Active rooms are held **in memory** and loaded from the database when first used.
@@ -132,6 +142,8 @@ locales/
   - `sender`: sends messages to connections
   - `scheduler`: timers for host transfer wait, PIN lockout and the room expiry sweep
 - /debug matches run the engine on **in-memory state only**, separate from real rooms.
+- /debug authentication state is also memory-only. Five failed password attempts from one source
+  lock that source for one minute, and debug tokens expire after eight hours without activity.
 
 ### 4.4 Storage
 - **Storage interfaces** are written in app terms, for example `saveRoom`, `loadRoomByCode`,
@@ -159,6 +171,9 @@ message.
 - **Secrets are always passed as files**, never as values. Any secret added later follows the
   same `…_FILE` pattern.
 - **Rejoin tokens** are random values stored in the database, so no signing key is needed.
+- Every response that contains or validates a player, Table, or debug credential uses
+  `Cache-Control: no-store`. The SPA shell revalidates; content-hashed assets may be cached as
+  immutable.
 
 ### 4.6 Logging and shutdown
 - pino writes JSON to stdout, which systemd's journal collects. The engine never logs.
@@ -176,6 +191,8 @@ message.
   - keeps the rejoin token in localStorage
   - sends `hello` on every connect; the server answers with a full view, so the screen always
     resyncs
+  - stores player and Table credentials in separate versioned keys per room so simultaneous roles
+    in one browser do not overwrite each other
 
 ### 5.2 Visuals
 - **Motion**:
@@ -341,5 +358,6 @@ Each step gets its own implementation plan.
 3. **Rooms subsystem** ([design](rooms-subsystem-design.md),
    [implementation plan](rooms-subsystem-implementation-plan.md)): joining, rejoining, seats,
    readiness, host, stalls, Table view PIN, persistence and the full message list.
-4. **UI and visual design**: brainstorm, then plan. Card art, fonts, colours, every screen and
-   animation.
+4. **UI and visual implementation** ([design](ui-visual-design.md),
+   [implementation plan](ui-visual-implementation-plan.md)): card art, fonts, colours, every
+   screen and animation, plus the protected debug experience.

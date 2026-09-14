@@ -1,6 +1,8 @@
 # Rooms Subsystem Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> `superpowers:subagent-driven-development` to implement this plan unit-by-unit. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build persistent multiplayer rooms with identity and PIN rejoining, seats, readiness,
 stalls, replacements, host succession, Table access, personalized views, and typed HTTP/WebSocket
@@ -16,9 +18,12 @@ deduplication without making events the source of truth.
 
 **Spec:** `docs/rooms-subsystem-design.md`
 
+**Status:** Approved on 2026-09-14 after rules, security, persistence, protocol, recovery,
+downstream-interface, and completeness review.
+
 ## Global constraints
 
-- Do not execute Task 1 until the repository skeleton and `packages/engine` are implemented and
+- Do not execute R001 until the repository skeleton and `packages/engine` are implemented and
   marked complete in `docs/implementation-progress.md`.
 - Read `AGENTS.md`, `docs/implementation-progress.md`, this header, the current task, its declared
   dependencies, and `docs/rooms-subsystem-design.md`. Tasks that touch the engine also require
@@ -87,7 +92,7 @@ of creating a duplicate.
 
 ---
 
-### [ ] Task 1: Define the complete rooms protocol
+### [ ] R001: Define the complete rooms protocol
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -109,6 +114,8 @@ of creating a duplicate.
 export type PlayerId = string;
 export type RoomId = string;
 export type RoomCode = string;
+export type ReactionId =
+  | "hello" | "nice" | "wellPlayed" | "wow" | "oops" | "oneMoment" | "thanks";
 export type PrincipalScope =
   | {type: "player"; playerId: PlayerId}
   | {type: "table"; hostControls: boolean};
@@ -123,7 +130,7 @@ export type RoomCommand =
   | {type: "removePlayer"; playerId: PlayerId}
   | {type: "transferHost"; playerId: PlayerId}
   | {type: "engineAction"; action: ClientEngineAction}
-  | {type: "sendReaction"; reaction: string}
+  | {type: "sendReaction"; reaction: ReactionId}
   | {type: "restartSession"}
   | {type: "leaveRoom"};
 
@@ -146,10 +153,12 @@ export interface RoomView {
   schema in protocol with the source seat omitted, constrain it with
   `satisfies z.ZodType<ClientEngineAction>`, and import engine types only.
 - [ ] Define HTTP schemas for create/join/Table access. Require basic settings, default advanced
-  settings from `design.md`, and accept PINs as exactly four ASCII digits.
+  settings from `design.md`, names with a 1,024-byte UTF-8 encoded-length bound, setting integers
+  within their documented caps, and PINs as exactly four ASCII digits. Reject name control and
+  line/paragraph-separator characters before service entry.
 - [ ] Define WebSocket schemas for `hello`, `command`, `helloAccepted`, `update`,
   `commandRejected`, `error`, and `accessRevoked`; include every stable rejection from rooms spec
-  §10.
+  §10, including reaction throttling and oversized requests.
 - [ ] Export the protocol surface, run `nix develop -c pnpm typecheck` and
   `nix develop -c pnpm lint`, and expect both exit 0.
 - [ ] Review `git diff --check`; update plan/progress and commit
@@ -157,7 +166,7 @@ export interface RoomView {
 
 ---
 
-### [ ] Task 2: Implement the pure room aggregate and seating/readiness policy
+### [ ] R002: Implement the pure room aggregate and seating/readiness policy
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -169,7 +178,7 @@ export interface RoomView {
 - Create: `apps/server/src/rooms/readiness.ts`
 - Create: `apps/server/src/rooms/index.ts`
 
-**Depends on:** Task 1 and implemented engine state/phase/config types.
+**Depends on:** R001 and implemented engine state/phase/config types.
 
 **Interfaces produced:**
 
@@ -186,6 +195,7 @@ export interface PlayerRecord {
   connected: boolean;
   disconnectedAt: number | null;
   replacementReady: boolean;
+  lastReactionAt: number | null;
 }
 
 export interface RoomSnapshot {
@@ -211,8 +221,9 @@ export type DomainResult =
   | {ok: false; code: RoomRejectionCode; details?: Record<string, unknown>};
 ```
 
-- [ ] Add JSON-safe private state using arrays/tagged records, plus
-  `normalizePlayerName(value) = value.trim().normalize("NFKC").toLowerCase()`.
+- [ ] Add JSON-safe private state using arrays/tagged records, plus NFKC/locale-independent
+  case normalization and a pure `Intl.Segmenter("und", {granularity: "grapheme"})` helper.
+  Accept 1–24 user-perceived characters after trimming and normalization.
 - [ ] Implement `assertRoomInvariants` for identity cap, normalized-name uniqueness, bidirectional
   seats, ranges, host membership, engine seat count, and replacement state. Errors contain only
   room ID/revision/invariant code.
@@ -229,7 +240,7 @@ export type DomainResult =
 
 ---
 
-### [ ] Task 3: Implement presence, replacement, and host succession policy
+### [ ] R003: Implement presence, replacement, and host succession policy
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -239,7 +250,7 @@ export type DomainResult =
 - Modify: `apps/server/src/rooms/invariants.ts`
 - Modify: `apps/server/src/rooms/index.ts`
 
-**Depends on:** Task 2 and rooms spec §§3–5.
+**Depends on:** R002 and rooms spec §§3–5.
 
 **Interfaces produced:**
 
@@ -268,7 +279,7 @@ export function applyHostDeadline(state: RoomSnapshot, hostId: PlayerId, deadlin
 
 ---
 
-### [ ] Task 4: Implement credential primitives
+### [ ] R004: Implement credential primitives
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -277,7 +288,7 @@ export function applyHostDeadline(state: RoomSnapshot, hostId: PlayerId, deadlin
 - Modify: `apps/server/src/rooms/index.ts`
 - Modify: prerequisite random-source interface only if byte generation is absent
 
-**Depends on:** Task 2 and the prerequisite cryptographic random-source interface.
+**Depends on:** R002 and the prerequisite cryptographic random-source interface.
 
 **Interfaces produced:**
 
@@ -294,9 +305,10 @@ export function recordPinSuccess(value: PinCredential): PinCredential;
 export function pinIsLocked(value: PinCredential, now: number): boolean;
 ```
 
-- [ ] Implement Node `crypto.scrypt`, random per-credential salts, constant-time comparison,
-  32-byte token secrets, and strict `selector.secret` parsing. Usable tokens exist only in return
-  values.
+- [ ] Implement PIN hashing with Node `crypto.scrypt` using `N=16384`, `r=8`, `p=1`, a 32-byte
+  result and fresh 16-byte salt. Issue independent random 16-byte selectors and 32-byte token
+  secrets; store a salted SHA-256 digest and compare it in constant time. Strictly parse
+  `selector.secret`. Usable tokens exist only in return values.
 - [ ] Implement pure five-failure/60,000 ms player and Table PIN lockout transitions using passed
   timestamps; successful/expired locks reset the sequence.
 - [ ] Run typecheck and lint; expect exit 0 with Node crypto restricted to this server edge.
@@ -305,7 +317,7 @@ export function pinIsLocked(value: PinCredential, now: number): boolean;
 
 ---
 
-### [ ] Task 5: Implement the room storage contract and SQLite adapter
+### [ ] R005: Implement the room storage contract and SQLite adapter
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -316,7 +328,7 @@ export function pinIsLocked(value: PinCredential, now: number): boolean;
 - Create: `apps/server/src/storage/sqlite/room-storage.ts`
 - Modify: storage/migration indexes and prerequisite database-schema types
 
-**Depends on:** Tasks 1–4 and the skeleton storage adapter.
+**Depends on:** R001–R004 and the skeleton storage adapter.
 
 **Interfaces produced:**
 
@@ -354,7 +366,7 @@ export interface RoomStorage {
 
 ---
 
-### [ ] Task 6: Implement identity and Table access flows
+### [ ] R006: Implement identity and Table access flows
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -362,7 +374,7 @@ export interface RoomStorage {
 - Create: `apps/server/src/rooms/access-service.ts`
 - Modify: `apps/server/src/rooms/index.ts`
 
-**Depends on:** Tasks 2–5.
+**Depends on:** R002–R005.
 
 **Interfaces produced:**
 
@@ -403,7 +415,7 @@ export class AccessService {
 
 ---
 
-### [ ] Task 7: Implement capabilities, personalized views, and redaction
+### [ ] R007: Implement capabilities, personalized views, and redaction
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -412,7 +424,7 @@ export class AccessService {
 - Create: `apps/server/src/rooms/views.ts`
 - Modify: `apps/server/src/rooms/index.ts`
 
-**Depends on:** Tasks 1–3 and implemented engine view/redaction functions.
+**Depends on:** R001–R003 and implemented engine view/redaction functions.
 
 **Interfaces produced:**
 
@@ -441,7 +453,7 @@ export function redactRoomEvents(
 
 ---
 
-### [ ] Task 8: Implement room queues, connection ownership, and scheduling
+### [ ] R008: Implement room queues, connection ownership, and scheduling
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -451,7 +463,7 @@ export function redactRoomEvents(
 - Create: `apps/server/src/rooms/room-scheduler.ts`
 - Modify: `apps/server/src/rooms/index.ts`
 
-**Depends on:** Tasks 5–7 and prerequisite sender/scheduler abstractions.
+**Depends on:** R005–R007 and prerequisite sender/scheduler abstractions.
 
 **Interfaces produced:**
 
@@ -494,7 +506,7 @@ export class RoomScheduler {
 
 ---
 
-### [ ] Task 9: Implement room commands and engine orchestration
+### [ ] R009: Implement room commands and engine orchestration
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -503,7 +515,7 @@ export class RoomScheduler {
 - Create: `apps/server/src/rooms/room-service.ts`
 - Modify: `apps/server/src/rooms/index.ts`
 
-**Depends on:** Tasks 1–8 and the complete engine. Read all game-rule/design documents.
+**Depends on:** R001–R008 and the complete engine. Read all game-rule/design documents.
 
 **Interfaces produced:**
 
@@ -529,11 +541,15 @@ export type AuthenticatedPlayer = AuthenticatedPrincipal & {
 - [ ] After Ready/connect/seat transitions, evaluate the gate. Start/restart/advance sessions via
   engine system actions and deal a shuffled deck; resume replacements without changing engine
   match state.
+- [ ] When a committed engine result enters `awaitingDeal(redeal)` or
+  `awaitingDeal(restart)`, enqueue a separate same-dealer system deal after broadcast without a
+  Ready gate. Persist and publish every redeal result before attempting the next shuffled deck.
 - [ ] On host `restartSession`, retain the completed engine state while entering arranging,
   unseat/unready everyone, choose a new injected-random first dealer, and defer engine
   `restartSession(firstDealer)` until the readiness gate opens.
-- [ ] Validate reactions against one server-owned preset allowlist before emitting them; never
-  accept arbitrary reaction text as a room event.
+- [ ] Validate reactions against the seven `ReactionId` values before emitting them; never accept
+  arbitrary reaction text. Using the injected clock and persisted `lastReactionAt`, reject more
+  than one accepted reaction per player per 2,000 ms with `reaction_rate_limited`.
 - [ ] For acceptance, increment revision, assert invariants, commit snapshot/events/token effects,
   replace manager state, then broadcast. Persist rejection before replying. On conflict reload and
   retry once through dedupe; uncertain storage errors never report success.
@@ -546,7 +562,7 @@ export type AuthenticatedPlayer = AuthenticatedPrincipal & {
 
 ---
 
-### [ ] Task 10: Implement room directory and HTTP routes
+### [ ] R010: Implement room directory and HTTP routes
 
 **Suggested implementer:** `gpt-5.6-terra`, high effort
 
@@ -555,7 +571,7 @@ export type AuthenticatedPlayer = AuthenticatedPrincipal & {
 - Create: `apps/server/src/routes/rooms.ts`
 - Modify: Hono route composition and dependency composition root
 
-**Depends on:** Tasks 1, 5–6, 8–9.
+**Depends on:** R001, R005–R006, and R008–R009.
 
 **Interfaces produced:**
 
@@ -570,21 +586,26 @@ export class RoomDirectory {
 ```
 
 - [ ] Generate six-character uppercase room codes from letters/digits excluding `0/O/1/I` and
-  retry unique-code conflicts. Validate the fixed settings through the engine's config boundary,
+  retry at most 32 unique-code conflicts before returning `room_code_generation_failed`. Validate
+  the fixed settings through the engine's config boundary,
   hash optional host/Table PINs, and create the unseated host, random first dealer, initial
   snapshot, first journal entry, and token atomically.
-- [ ] Parse all three requests with Task 1 Zod schemas before service entry. Compose services at
-  startup rather than module import, and never put tokens in URLs/logs.
+- [ ] Reject HTTP JSON bodies above 65,536 UTF-8 bytes before parsing. Parse all three requests
+  with R001 Zod schemas before service entry. Compose services at startup rather than module
+  import, and never put tokens in URLs/logs.
+- [ ] Set `Cache-Control: no-store` on every create/join/Table response and credential failure so
+  player and Table tokens or authentication results are never retained by browser/shared caches.
 - [ ] Map absent room to 404, invalid settings/body to 400, full/name conflicts to 409, lockout to
-  423, and incorrect credentials to 401 without revealing another player's PIN configuration.
-- [ ] Implement directory expiry delegation; actual periodic recovery/sweep wiring is Task 12.
+  423, incorrect credentials to 401, oversized bodies to 413, and exhausted room-code generation
+  to 503 without revealing another player's PIN configuration.
+- [ ] Implement directory expiry delegation; actual periodic recovery/sweep wiring is R012.
 - [ ] Run typecheck and lint; expect exit 0.
 - [ ] Review `git diff --check`; update plan/progress and commit
   `feat(server): expose room HTTP API`.
 
 ---
 
-### [ ] Task 11: Implement the authenticated room WebSocket edge
+### [ ] R011: Implement the authenticated room WebSocket edge
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -592,7 +613,7 @@ export class RoomDirectory {
 - Create: `apps/server/src/ws/room-socket.ts`
 - Modify: WebSocket route/composition file
 
-**Depends on:** Tasks 1, 6–9.
+**Depends on:** R001 and R006–R009.
 
 **Interfaces produced:**
 
@@ -615,7 +636,7 @@ export function createRoomSocketHandler(dependencies: RoomSocketDependencies): W
 
 ---
 
-### [ ] Task 12: Implement startup recovery, expiry sweep, and shutdown
+### [ ] R012: Implement startup recovery, expiry sweep, and shutdown
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -625,7 +646,7 @@ export function createRoomSocketHandler(dependencies: RoomSocketDependencies): W
 - Modify: `apps/server/src/rooms/room-service.ts`
 - Modify: server startup and graceful-shutdown composition
 
-**Depends on:** Tasks 5, 8–11.
+**Depends on:** R005 and R008–R011.
 
 **Interfaces produced:**
 
@@ -650,7 +671,7 @@ export async function startRoomRuntime(dependencies: RoomRuntimeDependencies): P
 
 ---
 
-### [ ] Task 13: Implement the typed browser room client and Zustand store
+### [ ] R013: Implement the typed browser room client and Zustand store
 
 **Suggested implementer:** `gpt-5.6-terra`, high effort
 
@@ -659,7 +680,7 @@ export async function startRoomRuntime(dependencies: RoomRuntimeDependencies): P
 - Create: `apps/web/src/store/room-store.ts`
 - Modify: existing browser reconnect/store composition
 
-**Depends on:** Tasks 1 and 11 plus the skeleton web socket client.
+**Depends on:** R001 and R011 plus the skeleton web socket client.
 
 **Interfaces produced:**
 
@@ -678,8 +699,9 @@ export interface RoomStoreState {
 }
 ```
 
-- [ ] Store tokens under versioned `fiftysix.room-token.v1.<ROOMCODE>` keys, send hello on every
-  reconnect, replace full view on hello, and clear the token for removed/left/expired revocation.
+- [ ] Store player and Table tokens separately under versioned
+  `fiftysix.room-token.v1.<scope>.<ROOMCODE>` keys, send hello on every reconnect, replace full
+  view on hello, and clear only the affected scope for removed/left/expired revocation.
 - [ ] Generate one UUID per user intent, retain it until matching update/rejection, and resend the
   same envelope—not a new ID—after uncertain disconnect.
 - [ ] Feed ordered update events plus resulting view to a typed animation callback. Do not build
@@ -691,7 +713,7 @@ export interface RoomStoreState {
 
 ---
 
-### [ ] Task 14: Verify the integrated rooms subsystem and hand it off
+### [ ] R014: Verify the integrated rooms subsystem and hand it off to U001
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -700,7 +722,7 @@ export interface RoomStoreState {
 - Modify: `docs/rooms-subsystem-implementation-plan.md`
 - Modify: `docs/implementation-progress.md`
 
-**Depends on:** Tasks 1–13 complete.
+**Depends on:** R001–R013 complete.
 
 **Interfaces produced:** No new runtime interface. This task produces a verified build plus a
 durable handoff to the next track.
@@ -710,7 +732,8 @@ Required manual scenarios:
 identity cap and normalized-name collision; seat contention; Ready automatic start;
 disconnect and same-seat rejoin; PIN token rotation and takeover; PIN/Table lockout;
 permanent Leave; replacement seat and Ready; host succession; Table redaction;
-duplicate command ID; restart recovery; 24-hour expiry behavior.
+duplicate command ID; reaction allowlist/cooldown; automatic same-dealer redeal/restart;
+restart recovery; simultaneous player/Table tabs; 24-hour expiry behavior.
 ```
 
 - [ ] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and
@@ -720,7 +743,7 @@ duplicate command ID; restart recovery; 24-hour expiry behavior.
   HTTP/WebSocket flows. Record concise evidence in the progress ledger.
 - [ ] Inspect logs using issued known tokens/PINs and hidden-card identifiers; require no secret or
   private-card occurrence and only the approved structured metadata.
-- [ ] Update `AGENTS.md` from planned to actual layout/run behavior, mark this plan complete, name
-  the next track in progress, and run `git status --short` plus `git diff --check`.
+- [ ] Update `AGENTS.md` from planned to actual layout/run behavior, mark this plan complete, set
+  U001 as the next action, and run `git status --short` plus `git diff --check`.
 - [ ] Commit the documentation/progress updates as `docs: complete rooms subsystem`, then stop and
   ask the user before starting the next track.

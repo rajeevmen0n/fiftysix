@@ -176,7 +176,18 @@ happens when:
 When the check happens:
 - **56**: after the deal.
 - **28**: after **all 8 cards** are dealt. A redeal cancels both auctions and the face-down
-  trump card.
+  trump card. The face-down card still counts as part of its owner's eight-card holding for
+  both the hand-point and team-Jack checks.
+
+To prevent a room configuration in which every possible deal must redeal, the app caps a custom
+threshold below the average points per player:
+
+| Game and players | Maximum threshold |
+|---|---:|
+| 56, 4 players | 13 |
+| 56, 6 players | 8 |
+| 56, 8 players | 6 |
+| 28, 4 players | 6 |
 
 ## 10. 28: differences from 56
 
@@ -204,6 +215,9 @@ When the check happens:
      different suit. Any earlier face-down card goes back to its owner's hand. A player who
      raises their own bid can switch suit or swap the card.
    - The carried-over bid **can be doubled**, and a carried-over double **can be redoubled**.
+   - If a double carries over from the first auction, it does **not** shorten this initial circuit
+     of the second auction. Every player gets one call. If all four pass, the carried bid and
+     double stand; only a redouble or a new bid ends or changes that circuit sooner.
    - If the first auction ended in a **redouble**, there is no second auction. The second
      deal happens and play begins.
    - A **forced 14 no trump** from the first auction still has a second auction. If everyone
@@ -231,6 +245,9 @@ When the check happens:
 - **After the reveal**, the trump-lead rule (§6.3) applies. Only cards that counted as trump,
   from the reveal round onward, count as trump having been played. Trump-suit cards played as
   plain cards before the reveal don't.
+- If the match ends before the reveal, the hidden suit and face-down card are **not revealed by
+  scoring or the result screen**. Post-match summaries, logs, views and events omit them for every
+  recipient; the bidder retains only the knowledge they already had during play.
 
 ### 10.4 Stakes
 - See §7.1. The defaults are 14–19 → 1/2, 20–27 → 2/3 and 28 → 3/4.

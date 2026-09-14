@@ -200,6 +200,8 @@ match the app’s calm contemporary broadcast-table visual style.
   material. Preserve a square transparent logo, square opaque icon, and seamless texture.
 - [ ] Optimize files without visible banding or edge seams. Verify the mark at 32/64 px, tile the
   texture across phone/TV proportions, and require that ivory text/cards retain contrast.
+- [ ] Record the declared production consumers: U009 uses the texture, and U012 uses the logo and
+  browser app icon. An asset without a planned consumer blocks this unit's acceptance.
 - [ ] Run asset metadata checks, lint, build, `git diff --check`, and an asset-origin audit;
   require success. Update plan/progress and commit `feat(web): add generated brand assets`.
 
@@ -339,6 +341,8 @@ export function controlModel(view: RoomView): ControlModel;
   player viewer remains at bottom.
 - [ ] Map server phase/capability data to display labels, dock mode, and component props without
   deriving whether an action is legal. Preserve long names and nullable/redacted fields.
+- [ ] Derive transient presentation IDs from room revision plus zero-based event index. Never
+  require a server-internal event ID or generate a random render key.
 - [ ] Run one-off pure checks across all seat/viewer combinations, 0/1/6/8/12/16 cards, narrow/
   wide containers, all room phases, and empty capability lists; require finite bounded results.
 - [ ] Run typecheck, lint, build, and `git diff --check`; require success. Update plan/progress and
@@ -470,7 +474,8 @@ export function StatusStrip(props: {view: RoomView; compact: boolean}): React.JS
 - [ ] Keep cards the brightest objects, texture extremely subtle, seat/table geometry stable as
   counts/bubbles/contract change, and every redacted/null field intentionally absent.
 - [ ] Drive real 4/6/8-seat rooms and 28 hidden/revealed states; inspect phone portrait/landscape,
-  desktop, TV, long names, and no-live-points views for leakage/overlap.
+  desktop, TV, long names, four-digit token balances, maximum stakes, and no-live-points views
+  for leakage/overlap.
 - [ ] Run typecheck, lint, build, forbidden-import checks, and `git diff --check`; require success.
   Update plan/progress and commit `feat(web): render table and status`.
 
@@ -557,6 +562,7 @@ export interface GameOverlayProps {kind: "stall" | "vote" | "recovery"; children
 - Create: `apps/web/src/net/room-api.ts`
 - Create: `apps/web/src/screens/Home.tsx`
 - Create: `apps/web/src/screens/Game.tsx`
+- Modify: `apps/web/index.html`
 - Modify: `apps/web/src/App.tsx`
 - Modify: `apps/web/src/store/room-store.ts`
 - Modify: `locales/en.json`
@@ -576,12 +582,18 @@ export interface GameRouteProps {mode: "player" | "table";}
 ```
 
 - [ ] Implement same-origin JSON calls with type-only protocol imports, explicit HTTP-status to
-  typed-error mapping, abort support, and no token in URL/log/error text.
+  typed-error mapping including 413 and temporary 503 failures, abort support, and no token in
+  URL/log/error text.
 - [ ] Render three clear Home paths: Create a table, Join a game, Join as Table view. Prefill both
   join paths from validated `?room=CODE`, keep visible labels, and preserve valid fields on error.
+- [ ] Use the generated `56` logo in the entry identity and wire the generated app icon into
+  browser document metadata. Verify both at their smallest rendered sizes.
 - [ ] Implement create basic/advanced settings exactly from design §2. Collapse advanced by
   default and summarize nondefaults; remove/disable impossible game/player/card combinations with
-  translated explanations without duplicating server validation authority.
+  translated explanations without duplicating server validation authority. Constrain names to
+  1–24 user-perceived characters, tokens/stakes to 1–999, host wait to 1–3,600 seconds, and
+  redeal threshold to the selected game/player cap. Keep names single-line and surface the
+  server's control-character rejection accessibly.
 - [ ] On successful player create/join, store the token through the room client and navigate to
   `/room/:code`; on Table authorization navigate to `/table/:code`. Restore an existing room token
   directly without calling join again.
@@ -589,8 +601,9 @@ export interface GameRouteProps {mode: "player" | "table";}
   token, render real loading/recovery status, and hand an accepted `RoomView` to the components
   already built. Keep player and Table capabilities distinct; U013 and U020 specialize their
   presentations without changing connection ownership.
-- [ ] Verify create/join/rejoin/Table success and every 400/401/404/409/423 response, query prefill,
-  field preservation, back/forward/reload, keyboard forms, narrow/wide layouts, and no URL token.
+- [ ] Verify create/join/rejoin/Table success and every 400/401/404/409/413/423/503 response,
+  query prefill, field preservation, back/forward/reload, keyboard forms, narrow/wide layouts,
+  and no URL token.
 - [ ] Run typecheck, lint, build, string/import scans, and `git diff --check`; require success.
   Update plan/progress and commit `feat(web): add room entry flows`.
 
@@ -743,9 +756,10 @@ commands.
 
 **Interfaces produced:** No new public interface; renders exact room view history/capabilities.
 
-- [ ] Add session log, permitted round history, live points when present, couch toggle, fixed
-  preset reactions, and permanent Leave to the player menu. Never reconstruct hidden history or
-  accept free text.
+- [ ] Add session log, permitted round history, live points when present, couch toggle, the seven
+  localized stable reactions (`hello`, `nice`, `wellPlayed`, `wow`, `oops`, `oneMoment`,
+  `thanks`), and permanent Leave to the player menu. Never reconstruct hidden history or accept
+  free text; present `reaction_rate_limited` as localized non-destructive feedback.
 - [ ] Render none/last/full history exactly as delivered. Use a dismissible phone sheet and an
   optional persistent wide sidebar without moving the core table.
 - [ ] Expose host move/swap/remove/transfer, first dealer where applicable, End match restart, and
@@ -778,8 +792,10 @@ export function SessionSummary(props: {view: RoomView; restartAllowed: boolean; 
 ```
 
 - [ ] Overlay match results on the familiar table with points, made/failed result, contract,
-  multiplier, tokens moved/running, and explicit revoke/surrender/redeal/restart/host-award reason.
-  Show Ready only from capability.
+  multiplier, tokens moved/running, and explicit revoke/surrender/restart/host-award reason.
+  Accept a nullable already-redacted contract, never reveal an unrevealed 28 trump, use a
+  transient notice rather than a full summary for every automatic redeal, and show Ready only
+  from capability. A later 28-redeal log entry may show its public first-auction facts.
 - [ ] Give session victory a dedicated Newsreader-led screen with winner/team markers, final log,
   and host-only Restart session. Preserve non-host next actions and full keyboard access.
 - [ ] Use restrained match emphasis and reserve richer celebration styling for session end; state
@@ -871,7 +887,7 @@ export interface TableScreenProps {view: RoomView; send(command: RoomCommand): s
 
 ```ts
 export interface AnimationUpdate {events: readonly RoomEvent[]; resultingView: RoomView;}
-export interface AnimationStepContext {displayedView: RoomView | null; event: RoomEvent; resultingView: RoomView;}
+export interface AnimationStepContext {displayedView: RoomView | null; event: RoomEvent; eventId: string; resultingView: RoomView;}
 export type AnimationStep = (context: AnimationStepContext) => Promise<RoomView | null>;
 export interface AnimationQueue {
   enqueue(update: AnimationUpdate): void;
@@ -885,6 +901,9 @@ export interface AnimationQueue {
 - [ ] Keep latest authoritative and displayed views separate. Queue each update's ordered
   redacted events, derive presentation-only intermediate frames without deciding legality, await
   one registered step at a time, and end exactly at `resultingView`.
+- [ ] Give each step the deterministic presentation ID `<revision>:<eventIndex>` derived from the
+  resulting room revision and zero-based event position. Use it for transient/layout identity
+  without treating it as protocol authority.
 - [ ] On hello/reconnect synchronize directly without replay. Catch up to newest view when the
   document is hidden, reduced motion requests instant transitions, or backlog exceeds 24 events;
   cancel stale step controllers without mutating network state.
@@ -1076,9 +1095,16 @@ export type DebugSource = {type: "seat"; seat: number} | {type: "host"};
 - [ ] Define Zod schemas for every debug request/response. Keep password/token out of URLs and
   responses beyond the login token; accept engine actions without trusting a client-claimed
   authenticated room seat because this isolated debug scope intentionally chooses an acting seat.
+  Reject JSON bodies above 65,536 UTF-8 bytes before parsing. Define stable safe failures for
+  incorrect password, source lockout, invalid/expired token, invalid action, and oversized body.
 - [ ] When `DEBUG_PASSWORD_FILE` is unset, register no debug API and let `/debug` reveal no debug
-  content. When set, read once at startup, compare safely, issue in-memory tokens from the
-  injected production `RandomSource`, and never log credentials.
+  content: modify the production SPA fallback so `/debug` returns a normal 404. When set, read
+  once at startup, serve the debug SPA route, compare passwords safely, issue in-memory tokens from the
+  injected production `RandomSource`, and never log credentials. Track failures per untrusted
+  peer address without honoring forwarded-address headers: five failures lock that source for
+  60,000 ms. Expire a debug token after eight hours without accepted debug activity.
+- [ ] Set `Cache-Control: no-store` on every debug authentication and session/action response,
+  including failures. Keep debug tokens out of persistent browser storage and caches.
 - [ ] Maintain one in-memory engine session per debug token. Use a deterministic seeded random
   adapter only to shuffle/choose setup; pass resulting deck/dealer into the real engine. Never
   load, view, mutate, or persist a real room.
@@ -1087,8 +1113,8 @@ export type DebugSource = {type: "seat"; seat: number} | {type: "host"};
   accepted change. Support explicit out-of-turn acting for Redouble and host controls while
   keeping system-only actions behind the create/restart endpoints.
 - [ ] Run deterministic one-off checks for disabled mode, login success/failure, token
-  isolation, same-seed replay, every seat view, show-all source data, invalid action, restart, and
-  real-room storage non-use.
+  isolation, source lockout and expiry with an injected clock, same-seed replay, every seat view,
+  show-all source data, invalid action, restart, and real-room storage non-use.
 - [ ] Run typecheck, lint, build, security/log/import scans, and `git diff --check`; require
   success. Update plan/progress and commit `feat(debug): add isolated engine service`.
 
@@ -1113,8 +1139,9 @@ export type DebugSource = {type: "seat"; seat: number} | {type: "host"};
 export interface DebugClient {login(password: string): Promise<void>; create(config: EngineConfig, seed: string | null): Promise<DebugSnapshot>; act(source: DebugSource, action: ClientEngineAction): Promise<DebugSnapshot>; restartMatch(): Promise<DebugSnapshot>;}
 ```
 
-- [ ] Keep `/debug` blank of debug functionality when disabled; otherwise show password login,
-  then the production create form plus optional deal seed. Keep debug token in memory only.
+- [ ] Confirm disabled production `/debug` is a normal server 404. When enabled, show only the
+  password login before authorization, then the production create form plus optional deal seed.
+  Keep the debug token in memory only.
 - [ ] Reuse production Game/Table/Card/Hand/ActionDock/Summary components. Add an unmistakable
   debug bar outside the game surface with Act as controls, viewer switcher, Show all hands toggle,
   live event log, and same-seed restart.
@@ -1149,7 +1176,8 @@ small/large phones portrait+landscape; tablet portrait+landscape; laptop; deskto
 4/6/8-seat 56 and 4-seat 28; 1–16-card hands; long names/text expansion; every room/game phase;
 Block/Auto-stop; hidden/revealed/no trump; stall/rejoin/replacement; host and Table controls;
 all results; couch; debug; keyboard; screen reader; focus; contrast; 200% zoom; reduced motion;
-offline/reconnect/revocation; animation order/catch-up; asset provenance and secret/card leakage.
+offline/reconnect/revocation; simultaneous player/Table tabs; reaction throttling; animation
+order/catch-up; asset usage/provenance and secret/card leakage.
 ```
 
 - [ ] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and

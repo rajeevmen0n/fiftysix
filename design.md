@@ -29,13 +29,13 @@ form. **Advanced** settings sit in a collapsed section and all have defaults.
 | Player count | 56: 4, 6, 8. 28: 4. | none | Basic |
 | Include 8s and 7s (56) | Yes / No. Only offered when cards divide evenly (rules §3). | none | Basic |
 | Illegal-play mode | **Block** or **Auto-stop** (§4) | none | Basic |
-| Starting tokens per team | Any positive number | 10 | Advanced |
-| Stake tiers | Bid thresholds and win/loss stakes for each tier | rules §7.1 | Advanced |
-| Redeal point threshold | Points at or below which a hand is redealt | 56: 2, 28: 1 | Advanced |
+| Starting tokens per team | Whole number from 1–999 | 10 | Advanced |
+| Stake tiers | Gap-free bid thresholds; each win/loss stake is a whole number from 1–999 | rules §7.1 | Advanced |
+| Redeal point threshold | Whole number from 0 through the game/player cap in rules §9 | 56: 2, 28: 1 | Advanced |
 | Surrender option | Off / On (§5) | Off | Advanced |
 | Round history | None / Last round / Full (§7) | Last round | Advanced |
 | Live points | Off / On (§7) | Off | Advanced |
-| Host transfer wait | Seconds the host can be disconnected before the role moves (§10) | 60 | Advanced |
+| Host transfer wait | Whole seconds from 1–3,600 before the role moves (§10) | 60 | Advanced |
 | Table view PIN | Optional 4-digit PIN needed to open the Table view (§13) | none | Basic |
 
 The create form also asks for the host's own name and optional PIN (§9).
@@ -122,8 +122,11 @@ them surrender.
 - In 28, the face-down trump card is visible **only to the bidder** until it's revealed. Everyone
   else only knows that a card has been placed. After the reveal, everyone can see it.
 - There's no in-game way to talk about cards. The only signals are bids and bid style.
-  Players can send **preset reactions** (a fixed set of emoji and short phrases). None of them
-  can describe cards, and there's no free-text chat.
+  Players can send these **preset reactions**: `hello` (👋 Hello), `nice` (👍 Nice),
+  `wellPlayed` (🙌 Well played), `wow` (😮 Wow), `oops` (😅 Oops), `oneMoment`
+  (⏳ One moment), and `thanks` (🙏 Thanks). The stable ID crosses the network and its label comes
+  from the translation file. None describes cards, and there's no free-text chat. The server
+  accepts at most one reaction per player every 2 seconds.
 - **Round history** setting, for rounds already collected in the current match:
   - **None**: collected rounds can't be viewed.
   - **Last round**: players can peek at the most recently finished round.
@@ -145,7 +148,9 @@ them surrender.
 - **Room code**: 6 characters from uppercase letters and digits, excluding look-alikes
   (0/O, 1/I). Every room gets a link like `/?room=K7MQ4P`, which opens the home page with the
   code filled in.
-- **Names** must be unique within a room, ignoring case.
+- **Names** are trimmed and Unicode-normalized, must contain 1–24 user-perceived characters, and
+  must be unique within a room, ignoring case. They are single-line and reject NUL plus ASCII
+  control characters while preserving normal Malayalam, emoji, and joiner sequences.
 - New identities always join unseated and count toward the room's player cap even while
   disconnected or unseated.
 - **PIN**: optional, 4 digits, set when joining. It lasts as long as the room.
@@ -158,6 +163,9 @@ them surrender.
     - After **5 wrong PINs**, PIN rejoin for that seat is locked for **1 minute**.
     - If the player **set no PIN**, rejoining from another browser is **blocked**. The only way
       back is for the host to remove that player so a new player can take the seat (§10).
+- Player and Table-view credentials use separate per-room browser-storage entries, so one browser
+  can keep a player tab and a Table-view tab open for the same room without overwriting either
+  identity.
 
 ## 10. Host, disconnects and replacement
 
@@ -190,11 +198,15 @@ them surrender.
 
 - Room state is stored on the server, so a server restart doesn't end a game.
 - A room is deleted after **24 hours with no players connected**.
-- The **session log** can be opened by anyone in the room. For each finished match it shows the
+- The **session log** can be opened by anyone in the room. For each logged result it shows the
   dealer, winning bid and bid style, any double or redouble, points made by each team, tokens
   moved (with the reason: made, failed, revoke, surrender or awarded by host) and running tokens.
-  Redeals and restarted matches are also listed, with no tokens moved. It also lists
-  the results of earlier sessions in the room. It's deleted with the room.
+  A 56 automatic redeal is announced transiently but isn't added to the persistent log because
+  no auction occurred. A 28 automatic redeal after its first auction is logged with the public
+  auction facts and no tokens moved. Restarted matches are always logged with no tokens moved.
+  Entries omit a contract when none existed, and never expose a 28 trump that wasn't revealed
+  during play. The log also lists the results of earlier sessions in the room. It's deleted with
+  the room.
 
 ## 12. UI
 
@@ -236,8 +248,8 @@ them surrender.
   screens** put the table in the centre, the hand along the bottom, status on one side and
   actions on the other. On wide screens the session log stays open as a sidebar.
 - After each match, an **end-of-match summary** shows each team's points, whether the bid was
-  made, tokens moved, and any special reason (revoke, surrender, redeal, restarted match, awarded
-  by host).
+  made, tokens moved, and any special reason (revoke, surrender, restarted match, awarded by
+  host). An automatic redeal uses the short notice in §8 instead of this summary.
 - At the end of a session, a winner screen shows the final session log and, for the host,
   Restart session.
 
@@ -294,8 +306,12 @@ them surrender.
 
 ## 14. Debug page (`/debug`)
 
-- Available on the live site, **protected by a password** set in server config. Without the
-  password, nothing debug-related is shown.
+- Available on the live site only when enabled by a **password** set in server config. When the
+  setting is absent, `/debug` and its APIs return a normal 404. Without successful password
+  authentication, only the login screen is shown.
+- Five failed password attempts from one source address lock further attempts from that source
+  for 1 minute. Authorization tokens are memory-only, expire after 8 hours without debug
+  activity, and are invalidated by a server restart.
 - **Setup**: the same form as Create a table (with advanced options), plus an optional **deal
   seed** so a deal can be reproduced exactly.
 - One browser plays every seat on the real game engine. After every change, the screen
