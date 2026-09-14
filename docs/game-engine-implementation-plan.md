@@ -1,8 +1,7 @@
 # Game Engine Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox
-> (`- [ ]`) syntax for tracking.
+> **Agent workflow:** Follow the lightweight develop-and-review loop in `AGENTS.md`; do not load
+> an additional process skill. Use the checkboxes (`- [ ]`) for progress tracking.
 
 **Goal:** Implement the dependency-free, deterministic game engine for complete sessions of 56
 and 28, including auctions, hidden trump, play, redeals, scoring, surrender, host resolutions,
@@ -32,9 +31,11 @@ completeness review.
 - Work strictly sequentially with one fresh implementation subagent per unit using
   `fork_turns: "none"`. Use `gpt-5.6-sol` at high effort for every engine unit and primary
   verification. Stop and ask the user after each completed unit.
-- Do not add a test framework or committed test files. Use deterministic `tsx` one-off scenario
-  commands, typecheck, lint, build, exhaustive-type checks, and replay comparisons while keeping
-  all logic independently testable.
+- Tests are not required solely for coverage, and no broad test framework is added preemptively.
+  Use typecheck, lint, build, exhaustive-type checks, and direct inspection where sufficient. If
+  verification requires deterministic scenarios, assertions, fakes, fixtures, replay code, or a
+  custom harness, commit that code as focused automated tests instead of disposable `tsx`
+  commands or temporary scripts.
 - `packages/engine` has no package dependencies and imports nothing from Node, the browser,
   protocol, server, web, storage, network, clocks, random generators, or loggers.
 - Engine inputs and outputs are plain JSON-safe data. Do not use classes, `Map`, `Set`, `Date`,
@@ -232,8 +233,9 @@ export function act(state: EngineState, action: EngineAction): ActionResult;
   tokens, phase/match consistency, unique card locations, and valid turn ownership. Extend it in
   later units as new state becomes reachable; failures identify invariant code without dumping
   private state.
-- [ ] Run one-off checks for valid/invalid session creation, source/action mismatches, immutable
-  inputs, JSON round-trip, initial event evolution, and deterministic duplicate calls.
+- [ ] Add and run focused automated tests for valid/invalid session creation, source/action
+  mismatches, immutable inputs, JSON round-trip, initial event evolution, and deterministic
+  duplicate calls.
 - [ ] Run typecheck, lint, build, and `git diff --check`; require success. Confirm exhaustive
   switches fail compilation when a temporary variant is unhandled, update plan/progress, and
   commit `feat(engine): add transition kernel`.
@@ -279,9 +281,9 @@ export function redealReason(holdings: readonly (readonly Card[])[], threshold: 
   redeal check until the second four cards are dealt.
 - [ ] Extend card-location invariants to cover hands, `undealt`, current/finished rounds, and
   face-down storage with each configured card in exactly one place.
-- [ ] Run deterministic scenarios for every supported player/deck size, first/last card seat,
-  invalid multisets, each redeal reason, reason precedence, same-dealer redeal, and 28 first-deal
-  deferral.
+- [ ] Add and run deterministic automated tests for every supported player/deck size, first/last
+  card seat, invalid multisets, each redeal reason, reason precedence, same-dealer redeal, and 28
+  first-deal deferral.
 - [ ] Run typecheck, lint, build, replay checks for every scenario, and `git diff --check`; require
   success. Update plan/progress and commit `feat(engine): deal cards and detect redeals`.
 
@@ -323,9 +325,9 @@ export function contractMultiplier(auction: AuctionState): 1 | 2 | 4;
 - [ ] Emit the exact ordered public auction events and fix the contract bidder/team, amount,
   trump, style, multiplier, and forced marker. Emit `playStarted(dealer + 1)` for completed 56
   auctions.
-- [ ] Run scenarios for 4/6/8-player turn cycles, pass-then-later-bid, partner/self overbids,
-  minimum/maximum bids, affordability edges, double cancellation, doubled pass termination,
-  out-of-turn redouble, forced bid, and every named rejection.
+- [ ] Add and run automated tests for 4/6/8-player turn cycles, pass-then-later-bid, partner/self
+  overbids, minimum/maximum bids, affordability edges, double cancellation, doubled pass
+  termination, out-of-turn redouble, forced bid, and every named rejection.
 - [ ] Run typecheck, lint, build, state/event replay checks, and `git diff --check`; require
   success. Update plan/progress and commit `feat(engine): implement auction rules`.
 
@@ -375,9 +377,9 @@ export function faceDownIsForced(state: EngineState, seat: Seat): boolean;
 - [ ] If the first auction was redoubled, skip the second auction after deal/redeal checking and
   start play immediately with the placed hidden trump. Start all completed 28 contracts with the
   dealer's right leading.
-- [ ] Run scenarios for forced 14, normal/redoubled first auctions, every second-auction minimum,
-  all-pass carry, carried double/redouble, cancellation by raise, same-holder replacement,
-  different winner, second-deal redeal, and illegal placement.
+- [ ] Add and run automated tests for forced 14, normal/redoubled first auctions, every
+  second-auction minimum, all-pass carry, carried double/redouble, cancellation by raise,
+  same-holder replacement, different winner, second-deal redeal, and illegal placement.
 - [ ] Run typecheck, lint, build, event replay/card-conservation checks, and `git diff --check`;
   require success. Update plan/progress and commit `feat(engine): implement 28 auction flow`.
 
@@ -428,9 +430,9 @@ export function decideSessionAction(state: EngineState, action: EngineAction): D
 - [ ] Implement system `restartSession(firstDealer)` only from `sessionOver`: archive winner/final
   tokens in `pastSessions`, reset balances/log, validate the supplied dealer, emit
   `sessionRestarted`, and enter `awaitingDeal(firstDeal)`.
-- [ ] Run scenarios for every scoring row and multiplier, capped payment, both session winners,
-  next-dealer rotation, restart during each eligible phase, award availability, session archival,
-  invalid system phase, and JSON replay.
+- [ ] Add and run automated tests for every scoring row and multiplier, capped payment, both
+  session winners, next-dealer rotation, restart during each eligible phase, award availability,
+  session archival, invalid system phase, and JSON replay.
 - [ ] Run typecheck, lint, build, invariants, and `git diff --check`; require success. Update
   plan/progress and commit `feat(engine): score matches and sessions`.
 
@@ -476,9 +478,9 @@ export function decidePlayAction(state: EngineState, action: EngineAction): Deci
 - [ ] Determine round winner by highest counting trump, otherwise highest lead suit; preserve
   first-play precedence for identical cards. Emit `roundWon`, add points, mark prior-round trump,
   clear reveal-turn flags, and lead from the winner. Score made/failed after the final round.
-- [ ] Run scenarios for follow-suit, free discard, early trump exceptions, no trump, identical
-  copies, reveal-before-earlier-plays counting as trump, forced face-down variants, each illegal
-  mode/kind, winner-led next round, total points, and last-round scoring.
+- [ ] Add and run automated tests for follow-suit, free discard, early trump exceptions, no
+  trump, identical copies, reveal-before-earlier-plays counting as trump, forced face-down
+  variants, each illegal mode/kind, winner-led next round, total points, and last-round scoring.
 - [ ] Run typecheck, lint, build, card-conservation/points/event-replay checks, and
   `git diff --check`; require success. Update plan/progress and commit
   `feat(engine): implement card play and trump reveal`.
@@ -517,9 +519,9 @@ export function decideSurrenderAction(state: EngineState, action: EngineAction):
   and resume play.
 - [ ] Reject winners, duplicate votes, proposals before certainty, repeated same-round proposals,
   and all surrender actions when the option is off. Preserve host restart/award during a vote.
-- [ ] Run certainty scenarios on both result directions and all team sizes; run proposal/vote
-  ordering, pass/fail thresholds, duplicate/opponent votes, same-round lockout, next-round reset,
-  play pause, host resolution, scoring, and replay scenarios.
+- [ ] Add and run automated tests for certainty in both result directions and all team sizes, plus
+  proposal/vote ordering, pass/fail thresholds, duplicate/opponent votes, same-round lockout,
+  next-round reset, play pause, host resolution, scoring, and replay.
 - [ ] Run typecheck, lint, build, invariants, and `git diff --check`; require success. Update
   plan/progress and commit `feat(engine): add surrender voting`.
 
@@ -604,9 +606,9 @@ export function redactEvent(
   return to owner only, hidden contract trump to bidder only, round points when live points is
   off, and result certainty to losing seats only. Assert that canonical nested match summaries
   already contain no unrevealed 28 suit/card. Preserve order by allowing `null` redactions.
-- [ ] For representative state in every phase, compare each listed capability with `decide`,
-  inspect every seat/Table view and event variant for forbidden cards/trump, and confirm view/
-  redaction never mutate full state.
+- [ ] Add and run automated tests using representative state in every phase: compare each listed
+  capability with `decide`, inspect every seat/Table view and event variant for forbidden cards/
+  trump, and confirm view/redaction never mutate full state.
 - [ ] Run typecheck, lint, build, JSON checks, and `git diff --check`; require success. Update
   plan/progress and commit `feat(engine): expose safe views and actions`.
 
@@ -637,15 +639,15 @@ dealer rotation; session restart; every viewer/settings combination; full event 
 
 - [ ] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and
   `nix develop -c pnpm build`; require exit 0.
-- [ ] Exercise every required matrix item with deterministic one-off commands. For at least one
-  complete 56 session and one complete 28 session, record actions/events, rebuild through
-  `evolve`, and require JSON equality with each `act` state after every action.
+- [ ] Exercise every required matrix item with committed deterministic automated tests. For at
+  least one complete 56 session and one complete 28 session, record actions/events, rebuild
+  through `evolve`, and require JSON equality with each `act` state after every action.
 - [ ] On every accepted action, require unchanged input JSON, passing invariants, card
   conservation, point totals, nonnegative tokens, deterministic duplicate results, and JSON
   round-trip. On every rejected action, require unchanged state and no events.
-- [ ] Inspect all seat/Table views and redacted event streams from the full sessions. Search for
+- [ ] Test all seat/Table views and redacted event streams from the full sessions. Search for
   another seat's card IDs, `undealt`, and unrevealed trump; require none outside the authorized
-  owner/full-state harness.
+  owner/full-state test fixture.
 - [ ] Inspect the dependency/import graph and emitted server bundle: require zero engine package
   dependencies and no Node/browser/protocol/server/storage/network/time/random/logger imports.
 - [ ] Update `AGENTS.md` with the actual engine module/export layout, mark this plan and engine

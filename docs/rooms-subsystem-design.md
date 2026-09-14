@@ -473,8 +473,10 @@ The room boundary checks these invariants after every accepted transition:
 - host selection refers to a current identity or is explicitly pending because none is connected
 - player and Table views satisfy their visibility contracts
 
-No test framework or tests are added with the initial implementation unless separately
-requested. The design supports later:
+Tests are not required solely to increase coverage, and no broad framework is added
+preemptively. When verification requires executable scenarios, assertions, fakes, fixtures or a
+custom harness, that code is committed as focused automated tests rather than used in disposable
+commands. Expected test targets include:
 
 - unit tests for pure seat, readiness, host, permission and lockout transitions
 - adapter-contract tests shared by SQLite and future storage adapters

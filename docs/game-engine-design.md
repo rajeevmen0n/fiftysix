@@ -511,7 +511,9 @@ message format is decided with the tech stack.
   bug, and evolve throws instead of trying to recover.
 
 ### 13.2 Guarantees
-These are written so they can become unit tests later. Per AGENTS.md, no tests are written now.
+These guarantees are direct automated-test targets. Tests are not required solely for coverage,
+but any executable verification of them is committed as a focused test rather than a disposable
+inline command or temporary harness.
 - The same state and action always give the same result.
 - Every card is in exactly one place: a hand, `undealt`, `faceDown`, the current round or a
   finished round.

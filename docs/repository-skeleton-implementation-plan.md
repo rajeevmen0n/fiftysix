@@ -1,8 +1,7 @@
 # Repository Skeleton Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox
-> (`- [ ]`) syntax for tracking.
+> **Agent workflow:** Follow the lightweight develop-and-review loop in `AGENTS.md`; do not load
+> an additional process skill. Use the checkboxes (`- [ ]`) for progress tracking.
 
 **Goal:** Establish a reproducible, deployable monorepo in which the pure engine and protocol
 packages, Hono server, React client, SQLite adapter, WebSocket boundary, and NixOS service are
@@ -35,9 +34,11 @@ Zustand, i18next, esbuild, Nixpkgs 26.05.
 - Use `gpt-5.6-sol` at high effort for the primary agent, server, persistence, Nix, and final
   verification. Use `gpt-5.6-terra` at high effort for a narrow protocol or browser unit. No unit
   in this plan needs Astra, generated imagery, or parallel implementation.
-- Do not add a test framework or test files. `AGENTS.md` explicitly defers tests; use compiler,
-  formatter/linter, build, evaluation, and focused process/browser/socket checks while preserving
-  injectable seams.
+- Tests are not required solely for coverage, and no broad test framework is added preemptively.
+  Use compiler, formatter/linter, build, evaluation, and direct process/browser/socket checks when
+  they need no custom verification code. If a check requires executable scenarios, assertions,
+  fakes, fixtures, or a custom harness, commit it as a focused automated test instead of a
+  disposable inline command or temporary script.
 - Run project commands through `nix develop -c`, except `nix build`, `nix run`, and
   `nix flake check`.
 - Pin `nixpkgs` to the stable `nixos-26.05` branch in `flake.lock`. Use `nodejs_24` and a pnpm 11

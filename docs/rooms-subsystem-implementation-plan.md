@@ -1,8 +1,7 @@
 # Rooms Subsystem Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> `superpowers:subagent-driven-development` to implement this plan unit-by-unit. Steps use
-> checkbox (`- [ ]`) syntax for tracking.
+> **Agent workflow:** Follow the lightweight develop-and-review loop in `AGENTS.md`; do not load
+> an additional process skill. Use the checkboxes (`- [ ]`) for progress tracking.
 
 **Goal:** Build persistent multiplayer rooms with identity and PIN rejoining, seats, readiness,
 stalls, replacements, host succession, Table access, personalized views, and typed HTTP/WebSocket
@@ -37,8 +36,10 @@ downstream-interface, and completeness review.
 - No task in this plan needs Astra or image generation. Future high-priority UI tasks use
   `gpt-6-astra` at high effort, stay narrowly scoped, and use Gemini MCP for every generated image
   asset.
-- Do not add a test framework or test files. The project defers tests. Use typecheck, lint, build,
-  and focused manual scenarios while preserving pure logic and injected dependencies.
+- Tests are not required solely for coverage, and no broad test framework is added preemptively.
+  Use typecheck, lint, build, and direct manual scenarios when sufficient. If verification
+  requires executable scenarios, assertions, fakes, fixtures, or a custom harness, commit it as a
+  focused automated test instead of a disposable inline command or temporary script.
 - Run project commands through `nix develop -c`, except `nix build` and `nix flake check`.
 - `packages/engine` remains dependency-free. `apps/web` uses only type imports from protocol and
   never imports engine or server code.

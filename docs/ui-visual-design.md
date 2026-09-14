@@ -306,8 +306,10 @@ authorization expires after eight idle hours and after every server restart.
 
 ## 12. Verification matrix
 
-No test framework is added as part of this design. Implementation units verify their own scope
-and preserve pure seams for later automated tests.
+Tests are not required solely for coverage, and no broad test or story framework is added
+preemptively. Implementation units use direct visual/manual checks where sufficient. If
+verification requires executable scenarios, assertions, fakes, fixtures, or a custom harness,
+that code is committed as focused automated tests instead of disposable commands.
 
 Manual responsive checks cover:
 
@@ -324,8 +326,8 @@ Manual responsive checks cover:
 - keyboard-only operation, visible focus, screen-reader labels, contrast, and reduced motion
 
 Pure functions for seat position, viewer-relative ordering, card sizing, control selection, and
-event-to-animation routing are kept independently testable. Component stories or a test framework
-may be introduced only in a later user-approved implementation unit.
+event-to-animation routing are kept independently testable. Component stories or specialized UI
+test tooling are added only when a unit needs them for maintained verification, not preemptively.
 
 ## 13. Implementation decomposition
 

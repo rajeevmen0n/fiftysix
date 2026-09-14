@@ -25,15 +25,20 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
 
 ## Agent workflow and context budget
 
+- Do not load or invoke `superpowers:*` process skills for normal work in this repository unless
+  the user explicitly requests one. Follow the lightweight develop-and-review loop below instead.
 - The user has a small-tier subscription. Implementation plans use **self-contained work units**
   that one session can finish, verify and commit. Sol, Terra and Luna may take moderately large
   units when the work is cohesive; split work that crosses unrelated boundaries.
 - Use `docs/implementation-progress.md` as the cross-session ledger. At the start of implementation,
   read this file, the relevant spec, and only the current plan unit plus its declared
   dependencies. At the end of every unit, update its checkbox and the ledger in the same commit.
-- Use a fresh subagent for **every implementation unit**. The primary agent coordinates, supplies
-  the exact task and relevant paths, reviews the diff, runs final verification, and updates
-  progress. Use an isolated fork (`fork_turns: "none"`) so old conversation context is not copied.
+- **Develop:** use one fresh subagent for the current implementation unit with the exact task and
+  relevant paths. Use an isolated fork (`fork_turns: "none"`) so old conversation context is not
+  copied.
+- **Review:** the primary agent reviews the diff, sends any focused corrections back to the same
+  implementer, runs final verification, then updates the plan checkbox and progress ledger in the
+  same commit.
 - Preferred primary-agent model: **`gpt-5.6-sol` with high reasoning effort**. Use the same model
   and effort for primary verification.
 - Subagent routing:
@@ -46,7 +51,7 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
     responsive state, or one animation.
 - Work **strictly sequentially**. Never dispatch implementation units in parallel. Finish,
   verify, record and commit the current unit, then ask the user before starting the next one.
-  Reviewer subagents stay read-only; only one implementer edits files at a time.
+  Only one implementer edits files at a time.
 - Use the Gemini MCP for every generated picture/image asset as required by Stack conventions.
   Do not substitute another image generator, stock art, or placeholders.
 - If a unit cannot be completed in the current token budget, stop before unrelated expansion,
@@ -127,11 +132,16 @@ These apply to all code, whatever the tech stack.
 - The production build is `nix build`. It uses the language's dependency lock file so builds are
   reproducible.
 
-### Testability
-Unit tests aren't being written yet, but all code must be written so they can be added later
-without refactoring.
-- **Don't write tests** or set up a test framework unless the user asks. This overrides any
-  test-first workflow or skill.
+### Testing and testability
+Tests are not required merely to increase coverage. Typecheck, lint, build and direct manual
+inspection are enough when they fully verify a unit without custom verification code.
+- **Keep verification code as tests.** If verifying a feature requires executable scenarios,
+  assertions, fakes, fixtures or a custom harness, commit that work as a focused automated test
+  instead of putting equivalent code in a disposable inline command or temporary script.
+- Do not add a broad test framework preemptively. When the first maintained test needs runner
+  support, add the smallest setup suitable for that package and use it for later tests.
+- This policy overrides mandatory test-first workflows: tests need not be written before the
+  implementation, but substantive verification code must not be thrown away.
 - **Pure game engine.** The rules of 56 and 28 (dealing, auction, play, scoring, redeals) live in
   a module with no I/O: no database, network, timers or logging. It takes the current state and
   an action, and returns either the new state plus the events it produced, or a rejection with a

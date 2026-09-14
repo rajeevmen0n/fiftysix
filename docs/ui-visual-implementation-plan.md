@@ -1,8 +1,7 @@
 # UI and Visual Design Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use
-> `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox
-> (`- [ ]`) syntax for tracking.
+> **Agent workflow:** Follow the lightweight develop-and-review loop in `AGENTS.md`; do not load
+> an additional process skill. Use the checkboxes (`- [ ]`) for progress tracking.
 
 **Goal:** Deliver the polished, responsive, accessible player, Table, and debug experiences for
 56 and 28 using only server-authoritative views and capabilities.
@@ -36,9 +35,11 @@ animation, accessibility, asset-provenance, type-interface, and completeness rev
   `gpt-5.6-sol` at high effort. Stop and ask the user after every completed unit.
 - Astra units are deliberately narrow: one asset family, component, responsive state, or motion
   family. Do not expand an Astra unit into adjacent screens or infrastructure.
-- Do not add a test framework, story system, snapshot files, or committed test files. Verify with
-  typecheck, lint, build, pure one-off commands, real room/debug flows, browser inspection, and
-  the responsive/accessibility matrix.
+- Tests, stories, and snapshots are not required solely for coverage, and no broad test/story
+  framework is added preemptively. Use typecheck, lint, build, real room/debug flows, browser
+  inspection, and the responsive/accessibility matrix where sufficient. If verification requires
+  executable scenarios, assertions, fakes, fixtures, snapshots, or a custom harness, commit the
+  result as a focused maintained test instead of a disposable command or temporary script.
 - `apps/web` imports only types from protocol and never imports runtime code from protocol,
   engine, or server. It never derives legality, hidden information, room authority, or scoring.
 - Render only server-provided views, events, and allowed actions. Lock only the initiating
@@ -343,8 +344,9 @@ export function controlModel(view: RoomView): ControlModel;
   deriving whether an action is legal. Preserve long names and nullable/redacted fields.
 - [ ] Derive transient presentation IDs from room revision plus zero-based event index. Never
   require a server-internal event ID or generate a random render key.
-- [ ] Run one-off pure checks across all seat/viewer combinations, 0/1/6/8/12/16 cards, narrow/
-  wide containers, all room phases, and empty capability lists; require finite bounded results.
+- [ ] Add and run focused automated tests across all seat/viewer combinations, 0/1/6/8/12/16
+  cards, narrow/wide containers, all room phases, and empty capability lists; require finite
+  bounded results.
 - [ ] Run typecheck, lint, build, and `git diff --check`; require success. Update plan/progress and
   commit `feat(web): add responsive view models`.
 
@@ -911,8 +913,8 @@ export interface AnimationQueue {
   rejection by recording a safe client diagnostic and synchronizing to the authoritative view.
 - [ ] Feed room store updates into the queue and render all game screens from displayed view while
   pending commands/status remain authoritative.
-- [ ] Run one-off checks for ordering, concurrent enqueue, catch-up triggers, reconnect, hidden
-  tab, reduced motion, failed/cancelled steps, close, and final view equality without test files.
+- [ ] Add and run focused automated tests for ordering, concurrent enqueue, catch-up triggers,
+  reconnect, hidden tab, reduced motion, failed/cancelled steps, close, and final view equality.
 - [ ] Run typecheck, lint, build, and `git diff --check`; require success. Update plan/progress and
   commit `feat(web): add animation queue`.
 
@@ -1112,7 +1114,7 @@ export type DebugSource = {type: "seat"; seat: number} | {type: "host"};
   append a live event log, and choose the next active seat from engine allowed actions after each
   accepted change. Support explicit out-of-turn acting for Redouble and host controls while
   keeping system-only actions behind the create/restart endpoints.
-- [ ] Run deterministic one-off checks for disabled mode, login success/failure, token
+- [ ] Add and run deterministic automated tests for disabled mode, login success/failure, token
   isolation, source lockout and expiry with an injected clock, same-seed replay, every seat view,
   show-all source data, invalid action, restart, and real-room storage non-use.
 - [ ] Run typecheck, lint, build, security/log/import scans, and `git diff --check`; require
