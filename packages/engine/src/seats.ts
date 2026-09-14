@@ -22,8 +22,8 @@ export function nextSeat(seat: Seat, playerCount: number): Seat {
 }
 
 export function teamOf(seat: Seat): Team {
-  if (!Number.isInteger(seat) || seat < 0) {
-    throw new RangeError("seat must be a non-negative whole number");
+  if (!Number.isInteger(seat) || seat < 0 || seat > 7) {
+    throw new RangeError("seat must be a whole number from 0 through 7");
   }
 
   return seat % 2 === 0 ? "A" : "B";
