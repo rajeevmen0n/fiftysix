@@ -228,10 +228,16 @@ them surrender.
 ### 12.6 Animations
 - The UI plays game events ("dealt", "card played", "round won", "trump revealed", …) **in order
   through an event queue**, finishing each event's visual step before showing the next state.
-- **v1** uses short, simple transitions: a played card slides to the table, the winning card is
-  highlighted, and the round slides toward the winner's seat.
-- Richer animations can later replace individual steps without changing game logic. Game logic
-  never depends on animation timing.
+- **v1 is polished**, with rich animations:
+  - an animated deal, with cards flying out to each seat
+  - card flips for the 28 face-down card and the trump reveal
+  - springy lift and play in the hand
+  - played cards sliding to the table, the winning card highlighted, and the round gathering and
+    sliding toward the winner's seat
+  - bid and reaction bubbles popping in
+  - celebrations at the end of a match and a session
+- Each event's animation is a separate step, so a step can be changed without touching game
+  logic. Game logic never depends on animation timing.
 - If the device has reduced motion turned on, transitions are instant.
 
 ### 12.7 Responsive layout
@@ -285,7 +291,6 @@ them surrender.
 Planned for later. Don't build these unless the user asks, but avoid designs that would block
 them:
 - Bots (filling seats, solo practice). Keep the engine usable by a non-human player.
-- Rich animations (§12.6)
 - In-app rules reference and auction help
 - Sounds and haptics
 - Installable PWA and dark mode

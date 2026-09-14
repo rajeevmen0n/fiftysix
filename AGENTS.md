@@ -14,8 +14,58 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
   relevant one before working on that part:
   - [Game engine](docs/superpowers/specs/2026-09-14-game-engine-design.md): the pure engine for
     56 and 28 (state, actions, events, views, allowed actions).
+  - [Tech stack](docs/superpowers/specs/2026-09-14-tech-stack-design.md): stack, repo layout,
+    server and web architecture, Nix package and NixOS module, order of work.
 - If the code disagrees with these docs, follow the docs and point out the mismatch. If a situation isn't covered, ask the user instead of inventing a rule. Update the docs when the user changes or adds a rule.
 - Keep this file up to date as the project grows: add the tech stack, how to run and test the app, the project layout, and any conventions, so the next session can pick up from there.
+
+## Tech stack
+Chosen in the [tech stack spec](docs/superpowers/specs/2026-09-14-tech-stack-design.md). The code
+doesn't exist yet: it's built in the order listed in that spec's §9, starting with the skeleton.
+Update this section when that changes.
+
+- **TypeScript** everywhere (`strict`, `noUncheckedIndexedAccess`), **Node.js 24**, **pnpm**
+  workspaces, **Biome** for lint and format.
+- **Server**: Hono, `@hono/node-ws`, Zod, Kysely with `better-sqlite3`, pino, bundled with esbuild.
+- **Web**: React 19, Vite, React Router, Zustand, Motion, Tailwind CSS v4, Radix UI primitives,
+  i18next, Fontsource, `qrcode`.
+- **Nix flake**: dev shell, `packages.default`, `apps.default`, `nixosModules.default`
+  (`services.fiftysix`), `checks`.
+
+### Layout
+```
+packages/engine/    pure game engine
+packages/protocol/  client↔server message types and Zod schemas
+apps/server/        Node server
+apps/web/           React app
+nix/                package.nix, module.nix
+locales/            UI strings
+```
+
+### Commands
+Run inside the dev shell: `nix develop -c pnpm <script>`.
+- `pnpm dev`: server and Vite dev server together
+- `pnpm build`, `pnpm start`
+- `pnpm typecheck`, `pnpm lint`, `pnpm format`
+- `nix build`, `nix run`, `nix flake check`
+
+### Stack conventions
+- `packages/engine` has no dependencies and imports nothing from other packages, Node or the
+  browser.
+- `apps/web` imports only **types** from `protocol`, never code from `engine` or `server`.
+- Every message crossing the network has a Zod schema in `protocol`, checked by the server first.
+- Every UI string goes through i18next. No hard-coded text in components.
+- No fixed pixel layout: use Tailwind's fluid and container-query utilities, and pass calculated
+  sizes as CSS variables.
+- Animations go through the animation queue and Motion, and respect `reducedMotion="user"`.
+- **Pictures and image assets** (backgrounds, table textures, card backs, face-card artwork,
+  illustrations, logo, app icons) are generated with the **Gemini MCP**, never stock or
+  placeholder images. Every prompt must explicitly ask for **high-quality, polished, visually
+  appealing** output that matches the app's visual style. Commit generated files under
+  `apps/web/src/assets/` and record the prompt used next to them.
+- Secrets are passed as files (`…_FILE` environment variables, `…File` module options), so they
+  work with sops-nix, agenix or plain files.
+- After changing `pnpm-lock.yaml`, update the dependency hash in `nix/package.nix`.
 
 ## Engineering conventions
 These apply to all code, whatever the tech stack.
@@ -66,6 +116,6 @@ without refactoring.
 - The adapter is picked from **configuration** at startup and passed to the services that need
   it.
 - Use a query builder or ORM that supports several databases, and portable schema migrations.
-  Avoid SQLite-only features. The exact library is chosen along with the tech stack.
+  Avoid SQLite-only features. The chosen library is Kysely with its migrator.
 - Keep the storage interfaces small enough that an in-memory version is easy to write for
   future tests.
