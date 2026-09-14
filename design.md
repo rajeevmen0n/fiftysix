@@ -36,6 +36,7 @@ form. **Advanced** settings sit in a collapsed section and all have defaults.
 | Round history | None / Last round / Full (§7) | Last round | Advanced |
 | Live points | Off / On (§7) | Off | Advanced |
 | Host transfer wait | Seconds the host can be disconnected before the role moves (§10) | 60 | Advanced |
+| Table view PIN | Optional 4-digit PIN needed to open the Table view (§13) | none | Basic |
 
 The create form also asks for the host's own name and optional PIN (§9).
 
@@ -57,12 +58,20 @@ The create form also asks for the host's own name and optional PIN (§9).
 
 ## 4. Illegal-play mode
 
-- **Block**: cards that can't legally be played are disabled. This covers failing to follow
-  suit, leading trump too early and, in 28, playing the face-down card before the reveal. A
-  revoke can't happen in this mode.
-- **Auto-stop**: players can play any card in their hand. The app detects an illegal play
-  **immediately**, stops the match and applies the revoke penalty (rules §8).
+- **Block**: cards and calls that aren't legal are disabled. A revoke can't happen in this mode.
+- **Auto-stop**: players can play any card in their hand and, in 28, ask for the reveal on their
+  turn even when they could follow suit. The app detects an illegal play **immediately**, stops the match and applies the
+  revoke penalty (rules §8). These illegal plays disqualify:
+  - failing to follow suit while holding the lead suit
+  - leading trump too early (rules §6.3)
+  - 28: the bidder is forced to play the face-down card (rules §10.3) and plays another card
+  - 28: asking for the trump reveal while able to follow suit
+- **Face-down card (28), in both modes**: the bidder can play it only when forced (rules §10.3)
+  or after a reveal has put it back in their hand. At any other time it can't be played. This is
+  a blocked move, not a disqualification.
 - Players can't call out or flag an illegal play themselves. Only the app detects it.
+- The engine's exact behaviour is specified in
+  [docs/superpowers/specs/2026-09-14-game-engine-design.md](docs/superpowers/specs/2026-09-14-game-engine-design.md).
 
 ## 5. Surrender option
 
@@ -73,8 +82,16 @@ them surrender.
 - **On**: once the result is mathematically certain, meaning the bidding team has already made
   its bid or can't reach it with the points left, the app:
   - tells the **losing team** they've already lost the match, and
-  - gives them a **Surrender** button. Surrendering ends the match and scores it normally.
-    If they don't surrender, play continues.
+  - gives them a **Surrender** button.
+- **Surrender vote**:
+  - Any member of the losing team can press Surrender at any time during play, not only on
+    their turn. It counts as their yes vote, **pauses the game for everyone** and starts a vote.
+  - Only the losing team votes. Everyone can see the vote.
+  - It passes when **more than half** of the losing team votes yes (4 players: 2 of 2;
+    6 players: 2 of 3; 8 players: 3 of 4). The match ends and is scored normally.
+  - It fails as soon as passing is impossible, and play continues.
+  - After a failed vote, Surrender can't be pressed again until the **next round**.
+  - There's no vote timer. A disconnected voter is handled like any stall (§10).
 - This happens even when live points (§7) are Off.
 
 ## 6. Auction UI
@@ -135,11 +152,16 @@ them surrender.
 
 - **Stalls**: when a player disconnects, the match **pauses** and everyone sees who the table is
   waiting for. There are no turn timers. When the player rejoins, play continues.
-- During a stall the host can:
-  - **Remove player**. The seat becomes open, and a new player who joins with the room code
-    takes it, **inheriting the hand, team and position**.
-  - **End match**. The match is **cancelled**: no tokens move, and the **same dealer redeals**,
-    as with a redeal (rules §9).
+- During a stall the host can **Remove player**. The seat becomes open, and a new player who
+  joins with the room code takes it, **inheriting the hand, team and position**.
+- **End match**: the host can use it **at any time** during a match, with two options:
+  - **Restart**: the match is cancelled, no tokens move, and the **same dealer redeals**, as with
+    a redeal (rules §9).
+  - **Award**: the host names the winning team. The match is scored at the bid's stakes,
+    including any double or redouble: if the bidding team is named, the opponents pay the win
+    stake; otherwise the bidding team pays the loss stake. The deal then passes on as usual.
+    Only available once all auctions are over and play has started.
+- Host controls are also available in an unlocked **Table view** (§13).
 - **Host transfer**: if the host is disconnected longer than the **host transfer wait** setting,
   host powers pass to the **next seated player counter-clockwise**. The old host doesn't get the
   role back on return. Whoever holds the role can hand it to any seated player at any time.
@@ -150,7 +172,8 @@ them surrender.
 - A room is deleted after **24 hours with no players connected**.
 - The **session log** can be opened by anyone in the room. For each finished match it shows the
   dealer, winning bid and bid style, any double or redouble, points made by each team, tokens
-  moved (with the reason: made, failed, revoke or surrender) and running tokens. It also lists
+  moved (with the reason: made, failed, revoke, surrender or awarded by host) and running tokens.
+  Redeals and restarted matches are also listed, with no tokens moved. It also lists
   the results of earlier sessions in the room. It's deleted with the room.
 
 ## 12. UI
@@ -176,7 +199,8 @@ them surrender.
 - **Table**: seats arranged relative to the viewer, who is always at the bottom. Each seat shows
   name, team colour, dealer marker, turn highlight, connection status, and bubbles for bids and
   reactions. The current round is in the centre. In 28, the face-down card sits beside the
-  bidder's seat (face up for the bidder only).
+  bidder's seat (face down for everyone else). The bidder sees it face up, set a little apart
+  from the rest of their hand.
 - **Action area**, above the hand: auction panel, Reveal trump, Surrender, Ready.
   - The **auction panel** slides up on the player's call: bid number stepper, suit or no trump
     buttons, bid style toggle (56), Pass, Double.
@@ -190,7 +214,8 @@ them surrender.
   screens** put the table in the centre, the hand along the bottom, status on one side and
   actions on the other. On wide screens the session log stays open as a sidebar.
 - After each match, an **end-of-match summary** shows each team's points, whether the bid was
-  made, tokens moved, and any special reason (revoke, surrender, redeal, cancelled match).
+  made, tokens moved, and any special reason (revoke, surrender, redeal, restarted match, awarded
+  by host).
 - At the end of a session, a winner screen shows the final session log and, for the host,
   Restart session.
 
@@ -228,6 +253,9 @@ them surrender.
 ## 13. Table view
 
 - Joined from the home page with the room code. It doesn't take a seat and has no hand.
+- If the host set a **Table view PIN** when creating the room, opening the Table view needs the
+  PIN, and an opened Table view gets the **host controls** (§10). If no PIN was set, anyone with
+  the room code can open it, with host controls.
 - Landscape layout for TVs and laptops, readable from across a room: a large table with all
   seats, a top bar with tokens, winning bid, trump and double, and a side panel with the auction
   and session log.

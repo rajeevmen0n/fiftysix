@@ -10,6 +10,10 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
 - Before any work that touches game logic, bidding, scoring, rooms or UI flow, read:
   - [rules.md](rules.md): the rules of 56 and 28. It is the source of truth for game logic.
   - [design.md](design.md): app decisions such as terminology, room settings, illegal-play modes, surrender option, visibility, joining and rejoining, host controls, UI layout, the Table view, the /debug page and what's out of scope for v1.
+- Design specs for individual parts of the app live in `docs/superpowers/specs/`. Read the
+  relevant one before working on that part:
+  - [Game engine](docs/superpowers/specs/2026-09-14-game-engine-design.md): the pure engine for
+    56 and 28 (state, actions, events, views, allowed actions).
 - If the code disagrees with these docs, follow the docs and point out the mismatch. If a situation isn't covered, ask the user instead of inventing a rule. Update the docs when the user changes or adds a rule.
 - Keep this file up to date as the project grows: add the tech stack, how to run and test the app, the project layout, and any conventions, so the next session can pick up from there.
 

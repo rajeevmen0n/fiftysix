@@ -161,6 +161,9 @@ Tiers can be changed per room (see design.md).
   - If the offenders are the **bidding team**, they pay the **loss stake**.
   - If the offenders are the **defending team**, they pay the **win stake**.
 - The next dealer then deals a new match.
+- The app's Auto-stop mode applies this same penalty to a few other illegal plays: leading trump
+  too early, and in 28, the bidder not playing a forced face-down card or asking for the reveal
+  while able to follow suit. See design.md §4.
 
 ## 9. Redeal
 
