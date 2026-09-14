@@ -323,7 +323,7 @@ export interface Scheduler {
 
 ---
 
-### [ ] S004: Establish the swappable storage boundary and migration baseline
+### [x] S004: Establish the swappable storage boundary and migration baseline
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -349,21 +349,21 @@ export interface StorageFactory {
 export function createStorageFactory(): StorageFactory;
 ```
 
-- [ ] Keep the app-facing contract free of Kysely, SQL, and `better-sqlite3` types. Select the
+- [x] Keep the app-facing contract free of Kysely, SQL, and `better-sqlite3` types. Select the
   SQLite adapter from the `sqlite:` URL scheme in the factory and reject unsupported schemes with
   a clear configuration error so a future adapter can be added without changing callers.
-- [ ] Convert `sqlite://./relative.db`, `sqlite:///absolute/path.db`, and `sqlite://:memory:` into
+- [x] Convert `sqlite://./relative.db`, `sqlite:///absolute/path.db`, and `sqlite://:memory:` into
   explicit SQLite targets without using the current directory implicitly outside the adapter.
-- [ ] Build the Kysely/`better-sqlite3` database only when `open` is called. Configure foreign
+- [x] Build the Kysely/`better-sqlite3` database only when `open` is called. Configure foreign
   keys, implement `checkHealth` as a driver-level constant select, make `close` idempotent, and
   keep every Kysely/SQLite import under `storage/`.
-- [ ] Add `001_initial` as an intentional no-domain-table baseline migration. Its `up` and `down`
+- [x] Add `001_initial` as an intentional no-domain-table baseline migration. Its `up` and `down`
   are portable no-ops; Kysely's own migration tables prove that migration discovery and locking
   work while reserving `002_rooms` for the already-planned rooms schema.
-- [ ] With a temporary database path, run migration twice, call `checkHealth`, inspect the SQLite
+- [x] With a temporary database path, run migration twice, call `checkHealth`, inspect the SQLite
   schema for Kysely's migration records, close the adapter, and remove only that explicit
   temporary database. Do not create or edit the default project database during verification.
-- [ ] Run typecheck, lint, build, and `git diff --check`; require success. Inspect imports to
+- [x] Run typecheck, lint, build, and `git diff --check`; require success. Inspect imports to
   confirm no file outside `storage/` imports Kysely or `better-sqlite3`, then update plan/progress
   and commit `feat(server): add storage foundation`.
 

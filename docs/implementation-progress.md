@@ -7,25 +7,25 @@ implementation plans.
 
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
-| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S004 | Execute S004 after user approval |
+| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S005 | Execute S005 after user approval |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute E001 after skeleton is complete |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute R001 after skeleton and engine are complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-S003 — Add configuration and injected runtime primitives — this unit commit
-(`feat(server): add runtime configuration`).
+S004 — Establish the swappable storage boundary and migration baseline — this unit commit
+(`feat(server): add storage foundation`).
 
-- Verification: one-off `tsx` assertions covered exact configuration defaults and overrides,
-  invalid ports/origins/log levels, scheduler cancellation and closure, 1,000 bounded random
-  integers, random bytes, the system clock, and distinct configured logger instances on
-  2026-09-14.
+- Verification: an explicit temporary SQLite database was migrated twice, health checked, and
+  closed idempotently on 2026-09-14. Schema inspection found only Kysely's migration and lock
+  tables, the `001_initial` record, and an unlocked migration lock; relative-file and in-memory
+  targets also passed, unsupported schemes were rejected, and temporary files were removed.
 - Repository checks: `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`,
-  `nix develop -c pnpm build`, and `git diff --check` all exited 0.
-- Boundary inspection: `Date.now`, `node:crypto` randomness, and timer calls occur only in runtime
-  adapters; server source has no direct `process.env` access.
-- Next unit: S004, Establish the swappable storage boundary and migration baseline.
+  `nix develop -c pnpm build`, and staged `git diff --check` all exited 0.
+- Boundary inspection: no TypeScript file outside `apps/server/src/storage/` imports Kysely or
+  `better-sqlite3`; the default `fiftysix.db` was not created.
+- Next unit: S005, Implement the HTTP and WebSocket server edge.
 
 ## Implementation readiness
 
