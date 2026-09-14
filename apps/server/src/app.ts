@@ -1,8 +1,9 @@
 import type { Server as HttpServer } from "node:http";
 import type { Http2SecureServer, Http2Server } from "node:http2";
 import { helloMessageSchema, serverMessageSchema } from "@fiftysix/protocol";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { createNodeWebSocket } from "@hono/node-ws";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import type { WSMessageReceive } from "hono/ws";
 import type { Logger } from "pino";
 
@@ -23,12 +24,71 @@ export interface AppDependencies {
   logger: Logger;
   helloHandler: HelloHandler;
   connections: ConnectionRegistry;
+  webRoot?: string;
 }
 
 type NodeServer = HttpServer | Http2Server | Http2SecureServer;
 type WebSocketInjector = (server: NodeServer) => void;
 
 const websocketInjectors = new WeakMap<Hono, WebSocketInjector>();
+
+const permissionsPolicy = [
+  "accelerometer=()",
+  "camera=()",
+  "display-capture=()",
+  "geolocation=()",
+  "gyroscope=()",
+  "magnetometer=()",
+  "microphone=()",
+  "midi=()",
+  "payment=()",
+  "publickey-credentials-get=()",
+  "usb=()",
+].join(", ");
+
+const hashedAssetPattern = /(?:^|\/)[^/]+-[A-Za-z0-9_-]{8,}\.[^/]+$/;
+
+function contentSecurityPolicy(requestUrl: string): string {
+  const host = new URL(requestUrl).host;
+
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    `connect-src 'self' ws://${host} wss://${host}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+function setSecurityHeaders(context: Context, requestUrl: string): void {
+  context.header("Content-Security-Policy", contentSecurityPolicy(requestUrl));
+  context.header("Permissions-Policy", permissionsPolicy);
+  context.header("Referrer-Policy", "no-referrer");
+  context.header("X-Content-Type-Options", "nosniff");
+  context.header("X-Frame-Options", "DENY");
+}
+
+function isReservedServerPath(path: string): boolean {
+  return (
+    path === "/api" ||
+    path.startsWith("/api/") ||
+    path === "/healthz" ||
+    path.startsWith("/healthz/") ||
+    path === "/ws" ||
+    path.startsWith("/ws/") ||
+    path === "/debug" ||
+    path.startsWith("/debug/")
+  );
+}
+
+function canServeWeb(method: string, path: string): boolean {
+  return (method === "GET" || method === "HEAD") && !isReservedServerPath(path);
+}
 
 function originIsAllowed(
   allowedOrigins: readonly string[] | null,
@@ -118,9 +178,18 @@ export function createApp(dependencies: AppDependencies): Hono {
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
   websocketInjectors.set(app, injectWebSocket);
 
+  app.use("*", async (context, next) => {
+    setSecurityHeaders(context, context.req.url);
+    await next();
+  });
+
   registerHealthRoute(app, dependencies);
 
   app.get("/ws", (context) => {
+    if (context.req.method !== "GET") {
+      return context.notFound();
+    }
+
     if (
       !originIsAllowed(
         dependencies.config.allowedOrigins,
@@ -182,6 +251,44 @@ export function createApp(dependencies: AppDependencies): Hono {
       },
     );
   });
+
+  if (dependencies.webRoot !== undefined) {
+    const staticFiles = serveStatic({
+      root: dependencies.webRoot,
+      onFound(path, context) {
+        context.header(
+          "Cache-Control",
+          hashedAssetPattern.test(path)
+            ? "public, max-age=31536000, immutable"
+            : "no-cache",
+        );
+      },
+    });
+    const spaShell = serveStatic({
+      root: dependencies.webRoot,
+      path: "index.html",
+      onFound(_path, context) {
+        context.header("Cache-Control", "no-cache");
+      },
+    });
+
+    app.use("*", async (context, next) => {
+      if (!canServeWeb(context.req.method, context.req.path)) {
+        return next();
+      }
+
+      return staticFiles(context, next);
+    });
+
+    app.on(["GET", "HEAD"], "*", async (context) => {
+      if (!canServeWeb(context.req.method, context.req.path)) {
+        return context.notFound();
+      }
+
+      const response = await spaShell(context, async () => undefined);
+      return response ?? context.notFound();
+    });
+  }
 
   return app;
 }

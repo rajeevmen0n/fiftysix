@@ -7,26 +7,28 @@ implementation plans.
 
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
-| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S007 | Execute S007 after user approval |
+| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S008 | Execute S008 after user approval |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute E001 after skeleton is complete |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute R001 after skeleton and engine are complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-S006 — Add the browser connection client and localized status screen — this unit commit
-(`feat(web): show connection status`).
+S007 — Compose production serving and graceful shutdown — this unit commit
+(`feat(server): serve and shut down application`).
 
-- Verification: injected-socket harnesses covered idempotent lifecycle, stale events,
-  authentication only while open, intentional disconnect, attempt reset, and the full capped
-  500–10,000 ms retry sequence on 2026-09-14. A real Hono WebSocket stop/restart harness observed
-  connecting, connected, reconnecting, connected, and disconnected in order while sending no
-  authentication message.
-- Browser check: `pnpm dev` started both watchers; headless Chrome renders at 390×844 and
-  1440×900 showed the localized status surface without layout overflow.
-- Repository checks: `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`,
-  `nix develop -c pnpm build`, focused import/string scans, and `git diff --check` all succeeded.
-- Next unit: S007, Compose production serving and graceful shutdown.
+- Verification: the direct production bundle served the SPA shell, a hashed asset, an arbitrary
+  client route, and `/healthz`; preserved 404s for unknown `/api` routes and `/debug`; handled
+  GET/HEAD distinctions; rejected a bootstrap hello without logging its token; and retained the
+  `001_initial` migration in an explicit temporary SQLite database on 2026-09-14.
+- Shutdown/browser checks: SIGTERM closed an open WebSocket with code 1001 before clean process
+  exit. Headless Chrome reached the localized Connected state under the production CSP, whose
+  WebSocket sources are limited to the request host. Shell revalidation, immutable hashed-asset
+  caching, security headers, and Nix-wrapper parity were inspected directly.
+- Repository checks: shutdown coordinator harness, invalid-config process check,
+  `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, `nix develop -c pnpm build`,
+  `nix build`, and `git diff --check` all succeeded.
+- Next unit: S008, Complete the Nix package, app, checks, and NixOS module.
 
 ## Implementation readiness
 

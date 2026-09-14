@@ -486,7 +486,7 @@ export function createWebSocketClient(dependencies: {
 
 ---
 
-### [ ] S007: Compose production serving and graceful shutdown
+### [x] S007: Compose production serving and graceful shutdown
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -516,30 +516,30 @@ export interface ShutdownCoordinator {
 export async function startServer(config: AppConfig): Promise<RunningServer>;
 ```
 
-- [ ] Compose logger, production clock/random/scheduler, SQLite storage, migrations, connection
+- [x] Compose logger, production clock/random/scheduler, SQLite storage, migrations, connection
   registry, rejecting bootstrap hello handler, Hono app, and Node WebSocket adapter only inside
   `startServer`. Keep `main.ts` as the thin process entry that parses `process.env`, starts once,
   and maps startup failure to a nonzero exit without logging secrets.
-- [ ] In production, serve hashed/static files from the web directory placed beside the server
+- [x] In production, serve hashed/static files from the web directory placed beside the server
   bundle. Return `index.html` as the fallback only for non-API, non-WebSocket `GET`/`HEAD` routes;
   preserve real 404/method responses for `/api/*`, `/healthz`, `/ws`, and the reserved `/debug`
   path. U026 conditionally enables the `/debug` SPA fallback with the debug service.
-- [ ] Add the production security headers from the tech-stack spec: same-origin CSP with no inline
+- [x] Add the production security headers from the tech-stack spec: same-origin CSP with no inline
   script, inline style attributes allowed only for Motion/CSS variables, no object/embed target,
   frame denial, `nosniff`, `no-referrer`, and restrictive browser permissions. Do not set HSTS in
   the app. Revalidate the SPA shell and cache content-hashed assets as immutable.
-- [ ] Implement a shutdown coordinator that is idempotent and closes in order: stop accepting
+- [x] Implement a shutdown coordinator that is idempotent and closes in order: stop accepting
   HTTP/upgrades, close registered sockets, stop schedulers, wait for registered future service
   drains, then close storage. Have both `SIGTERM` and `SIGINT` await the same path; a second signal
   may force process exit.
-- [ ] Run the built server against an explicit temporary SQLite file. Verify `/`, one asset, an
+- [x] Run the built server against an explicit temporary SQLite file. Verify `/`, one asset, an
   arbitrary client route, `/healthz`, an unknown `/api` route, the reserved `/debug` 404, and
   `/ws`. Send SIGTERM during an open WebSocket, require the socket and process to close cleanly,
   and confirm the migration record persists.
-- [ ] Inspect production responses to require the security headers, shell/asset cache policy, and
+- [x] Inspect production responses to require the security headers, shell/asset cache policy, and
   a CSP that still permits same-origin WebSocket use, generated QR images, Motion transforms, and
   calculated CSS-variable styles.
-- [ ] Run typecheck, lint, build, `nix build`, and `git diff --check`; require success. Verify
+- [x] Run typecheck, lint, build, `nix build`, and `git diff --check`; require success. Verify
   `node dist/server/server.js` and the current Nix wrapper serve identical web/health behavior,
   then update plan/progress and commit `feat(server): serve and shut down application`.
 
