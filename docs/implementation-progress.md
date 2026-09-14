@@ -10,7 +10,7 @@ implementation plans.
 | Repository skeleton | Not written | Not started | — | Write and approve the skeleton implementation plan |
 | Pure engine | Not written | Not started | — | Plan after the skeleton plan |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Planned; prerequisites missing | — | Execute R001 after skeleton and engine are complete |
-| UI and visual design | Not written | Designed | — | Write the implementation plan after the foundation plans are approved |
+| UI and visual design | Not written | Design approved; planning deferred | — | Write the UI plan after the skeleton and engine plans |
 
 ## Last completed unit
 
