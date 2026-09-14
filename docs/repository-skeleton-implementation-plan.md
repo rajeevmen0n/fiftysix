@@ -545,7 +545,7 @@ export async function startServer(config: AppConfig): Promise<RunningServer>;
 
 ---
 
-### [ ] S008: Complete the Nix package, app, checks, and NixOS module
+### [x] S008: Complete the Nix package, app, checks, and NixOS module
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -585,26 +585,26 @@ services.fiftysix = {
 };
 ```
 
-- [ ] Finalize `nix/package.nix` so `$out/lib/fiftysix/server.js`, `$out/lib/fiftysix/web/`, the
+- [x] Finalize `nix/package.nix` so `$out/lib/fiftysix/server.js`, `$out/lib/fiftysix/web/`, the
   native runtime dependency closure, and `$out/bin/fiftysix` match the tech-stack spec. Inspect
   the native module with `ldd` on Linux or `otool -L` on Darwin and require nixpkgs SQLite rather
   than a bundled library.
-- [ ] Expose the default package/app, dev shell, formatter, and checks for TypeScript, Biome, and
+- [x] Expose the default package/app, dev shell, formatter, and checks for TypeScript, Biome, and
   package build on all three declared systems. Export only the NixOS module independent of the
   per-system output, set its package default through the flake wrapper as shown above, and keep it
   evaluable on Linux.
-- [ ] Implement every documented `services.fiftysix` option with the exact defaults and types.
+- [x] Implement every documented `services.fiftysix` option with the exact defaults and types.
   Map values to environment variables, join allowed origins with commas, configure
   `DynamicUser`, `StateDirectory=fiftysix`, `Restart=on-failure`, the documented hardening, and
   optional firewall opening.
-- [ ] When `debugPasswordFile` is non-null, use
+- [x] When `debugPasswordFile` is non-null, use
   `LoadCredential=debug-password:<path>` and set `DEBUG_PASSWORD_FILE` to the systemd credential
   path. Do not copy the secret to the Nix store or place its contents in the environment. Omit
   both settings when the option is null.
-- [ ] Evaluate disabled, default-enabled, customized, firewall, and credential-enabled module
+- [x] Evaluate disabled, default-enabled, customized, firewall, and credential-enabled module
   configurations with `nixosSystem`; inspect the resulting unit/environment and require the
   documented values, hardening, and absence of secret content.
-- [ ] Run `nixfmt --check flake.nix nix/package.nix nix/module.nix`, `nix build`, a bounded
+- [x] Run `nixfmt --check flake.nix nix/package.nix nix/module.nix`, `nix build`, a bounded
   `nix run` health smoke check, and `nix flake check`; require success. Run `git diff --check`,
   update plan/progress, and commit `build(nix): package and deploy fiftysix`.
 

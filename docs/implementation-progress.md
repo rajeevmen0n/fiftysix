@@ -7,28 +7,26 @@ implementation plans.
 
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
-| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S008 | Execute S008 after user approval |
+| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S009 | Execute S009 after user approval |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute E001 after skeleton is complete |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute R001 after skeleton and engine are complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-S007 — Compose production serving and graceful shutdown — this unit commit
-(`feat(server): serve and shut down application`).
+S008 — Complete the Nix package, app, checks, and NixOS module — this unit commit
+(`build(nix): package and deploy fiftysix`).
 
-- Verification: the direct production bundle served the SPA shell, a hashed asset, an arbitrary
-  client route, and `/healthz`; preserved 404s for unknown `/api` routes and `/debug`; handled
-  GET/HEAD distinctions; rejected a bootstrap hello without logging its token; and retained the
-  `001_initial` migration in an explicit temporary SQLite database on 2026-09-14.
-- Shutdown/browser checks: SIGTERM closed an open WebSocket with code 1001 before clean process
-  exit. Headless Chrome reached the localized Connected state under the production CSP, whose
-  WebSocket sources are limited to the request host. Shell revalidation, immutable hashed-asset
-  caching, security headers, and Nix-wrapper parity were inspected directly.
-- Repository checks: shutdown coordinator harness, invalid-config process check,
-  `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, `nix develop -c pnpm build`,
-  `nix build`, and `git diff --check` all succeeded.
-- Next unit: S008, Complete the Nix package, app, checks, and NixOS module.
+- Package verification: `nix build` produced the wrapper, server bundle, web tree, and native
+  runtime dependencies. The rebuilt Darwin addon links to nixpkgs SQLite, and the Linux package
+  uses `autoPatchelfHook` for its runtime closure.
+- Module verification: disabled, default-enabled, customized, firewall, and credential-enabled
+  Linux `nixosSystem` evaluations produced the documented defaults, environment, hardening,
+  firewall port, and credential path while omitting credential settings when disabled.
+- Repository checks: `nixfmt --check`, a bounded `nix run` `/healthz` smoke check,
+  `nix flake check` (package, TypeScript, and Biome), and `git diff --check` succeeded on
+  2026-09-14.
+- Next unit: S009, Verify the integrated skeleton and hand off to engine implementation.
 
 ## Implementation readiness
 

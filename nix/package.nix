@@ -9,6 +9,7 @@
   pkg-config,
   sqlite,
   makeWrapper,
+  autoPatchelfHook,
 }:
 
 let
@@ -34,7 +35,8 @@ stdenv.mkDerivation (finalAttrs: {
     pkg-config
     stdenv.cc
     makeWrapper
-  ];
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
 
   buildInputs = [ sqlite ];
 
