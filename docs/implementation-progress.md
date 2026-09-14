@@ -7,26 +7,29 @@ implementation plans.
 
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
-| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | In progress | S009 | Execute S009 after user approval |
-| Pure engine | `docs/game-engine-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute E001 after skeleton is complete |
-| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute R001 after skeleton and engine are complete |
+| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Await user approval before E001 |
+| Pure engine | `docs/game-engine-implementation-plan.md` | Ready | E001 | Execute E001 after user approval |
+| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-S008 — Complete the Nix package, app, checks, and NixOS module — this unit commit
-(`build(nix): package and deploy fiftysix`).
+S009 — Verify the integrated skeleton and hand off to engine implementation — this unit commit
+(`docs: complete repository skeleton`).
 
-- Package verification: `nix build` produced the wrapper, server bundle, web tree, and native
-  runtime dependencies. The rebuilt Darwin addon links to nixpkgs SQLite, and the Linux package
-  uses `autoPatchelfHook` for its runtime closure.
-- Module verification: disabled, default-enabled, customized, firewall, and credential-enabled
-  Linux `nixosSystem` evaluations produced the documented defaults, environment, hardening,
-  firewall port, and credential path while omitting credential settings when disabled.
-- Repository checks: `nixfmt --check`, a bounded `nix run` `/healthz` smoke check,
-  `nix flake check` (package, TypeScript, and Biome), and `git diff --check` succeeded on
-  2026-09-14.
-- Next unit: S009, Verify the integrated skeleton and hand off to engine implementation.
+- Workspace verification: `pnpm build`, the final direct `pnpm typecheck` and `pnpm lint`,
+  `nix build`, and `nix flake check` succeeded on 2026-09-14. Flake evaluation returned package
+  derivations for exactly `aarch64-darwin`, `aarch64-linux`, and `x86_64-linux`; the host native
+  addon links to nixpkgs SQLite 3.51.2.
+- Runtime smoke: focused `tsx` harnesses covered configuration, first/idempotent migrations,
+  healthy/failed storage, and browser reconnect. The packaged server covered static assets, SPA
+  fallback, `/healthz`, reserved `/debug`, every bootstrap WebSocket rejection, token-safe logs,
+  and clean SIGTERM with an open socket, all against an explicit removed-after-use temporary DB.
+- Deployment and boundaries: the unchanged S008 NixOS evaluations cover disabled/default/custom,
+  firewall, credential, and hardening variants. A complete-tree `rg` audit found no dependency,
+  ambient-input, UI-string, secret, migration, fake-hash, or generated-artifact violations;
+  `git diff --check` also succeeded.
+- Next unit: E001, Define cards, seats, configuration, and stakes, after user approval.
 
 ## Implementation readiness
 

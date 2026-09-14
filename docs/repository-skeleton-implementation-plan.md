@@ -610,7 +610,7 @@ services.fiftysix = {
 
 ---
 
-### [ ] S009: Verify the integrated skeleton and hand off to engine implementation
+### [x] S009: Verify the integrated skeleton and hand off to engine implementation
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -633,20 +633,20 @@ reserved /debug 404; SIGTERM with an open socket; nix build/run/check; NixOS def
 firewall, credentials, and hardening.
 ```
 
-- [ ] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and
+- [x] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and
   `nix develop -c pnpm build`; require exit 0 for each.
-- [ ] Run `nix build` and `nix flake check`; require exit 0. Run the result with an explicit
+- [x] Run `nix build` and `nix flake check`; require exit 0. Run the result with an explicit
   temporary database URL, verify `/`, `/healthz`, SPA fallback, and the WebSocket rejection path,
   then terminate it with SIGTERM and require exit 0.
-- [ ] Exercise every required smoke-matrix item. Record concise commands/results in the progress
+- [x] Exercise every required smoke-matrix item. Record concise commands/results in the progress
   ledger, including the three evaluated flake systems and the host system's native SQLite link.
-- [ ] Inspect the complete tree with `rg`: require no direct engine dependencies; no web runtime
+- [x] Inspect the complete tree with `rg`: require no direct engine dependencies; no web runtime
   imports from protocol/engine/server; no ambient time/random use outside adapters; no visible
   hard-coded JSX strings; no usable tokens, secret contents, dummy domain tables, fake hash in
   Nix source, or generated database/build artifacts.
-- [ ] Update `AGENTS.md` from planned to actual layout and run behavior without duplicating
+- [x] Update `AGENTS.md` from planned to actual layout and run behavior without duplicating
   detailed specs. Mark this unit and the repository-skeleton track complete, set E001 as the next
   action, and leave rooms blocked on the still-missing engine only.
-- [ ] Run `git status --short` and `git diff --check`, review every final documentation change,
+- [x] Run `git status --short` and `git diff --check`, review every final documentation change,
   and commit `docs: complete repository skeleton`. Stop and ask the user before implementing
   E001.

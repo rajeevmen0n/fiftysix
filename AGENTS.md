@@ -54,10 +54,9 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
 
 ## Tech stack
 Chosen in the [tech stack spec](docs/tech-stack-design.md). The reproducible workspace and package
-graph were established in S001. Implementation continues sequentially from S002 in
-[the repository-skeleton plan](docs/repository-skeleton-implementation-plan.md), then proceeds
-through engine, rooms, and UI/debug as recorded in
-[the progress ledger](docs/implementation-progress.md). Update this section when that changes.
+graph, bootstrap application, SQLite migration baseline, production package, and NixOS module are
+implemented by [the repository-skeleton plan](docs/repository-skeleton-implementation-plan.md).
+Continue with the next unit recorded in [the progress ledger](docs/implementation-progress.md).
 
 - **TypeScript** everywhere (`strict`, `noUncheckedIndexedAccess`), **Node.js 24**, **pnpm**
   workspaces, **Biome** for lint and format.
@@ -69,20 +68,29 @@ through engine, rooms, and UI/debug as recorded in
 
 ### Layout
 ```
-packages/engine/    pure game engine
-packages/protocol/  client↔server message types and Zod schemas
-apps/server/        Node server
-apps/web/           React app
-nix/                package.nix, module.nix
-locales/            UI strings
+packages/engine/    pure engine boundary; game implementation starts at E001
+packages/protocol/  shared network types and runtime Zod schemas
+apps/server/        composition root, HTTP/WebSocket edges, runtime adapters, SQLite storage
+apps/web/           React bootstrap app, localized connection state, browser transport
+nix/                reproducible package and services.fiftysix NixOS module
+locales/            browser strings
 ```
 
 ### Commands
 Run inside the dev shell: `nix develop -c pnpm <script>`.
-- `pnpm dev`: server and Vite dev server together
-- `pnpm build`, `pnpm start`
+- `pnpm dev`: server on `127.0.0.1:8056` plus Vite; Vite proxies `/api` and `/ws`
+- `pnpm build`: writes the server bundle/native runtime modules under `dist/server/` and the
+  browser build under `dist/web/`
+- `pnpm start`: serves the built browser app, `/healthz`, and `/ws` from one process; client routes
+  receive the SPA fallback, while `/debug` remains a 404 until its planned implementation
 - `pnpm typecheck`, `pnpm lint`, `pnpm format`
-- `nix build`, `nix run`, `nix flake check`
+- `nix build`, `nix run`, `nix flake check`: build, run, and verify the packaged application
+
+The server creates the configured SQLite database and runs migrations at startup. For local smoke
+work, set `DATABASE_URL=sqlite:///absolute/temporary/path.db` rather than using the default
+repository-relative database. Stop the server with `SIGINT` or `SIGTERM` for graceful socket and
+storage shutdown. On NixOS, enable `services.fiftysix`; its default database lives in the service
+state directory.
 
 ### Stack conventions
 - `packages/engine` has no dependencies and imports nothing from other packages, Node or the
