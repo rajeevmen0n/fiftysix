@@ -214,7 +214,7 @@ a duplicate.
 
 ---
 
-### [ ] S002: Define the bootstrap connection protocol
+### [x] S002: Define the bootstrap connection protocol
 
 **Suggested implementer:** `gpt-5.6-terra`, high effort
 
@@ -251,17 +251,17 @@ export type HealthResponse = {status: "ok"} | {status: "unavailable"};
 export const healthResponseSchema: z.ZodType<HealthResponse>;
 ```
 
-- [ ] Define strict Zod objects for `hello` and the protocol-error envelope. Require a nonempty
+- [x] Define strict Zod objects for `hello` and the protocol-error envelope. Require a nonempty
   bounded token and prohibit unknown properties. Keep protocol error details free of submitted
   values.
-- [ ] Define the two-variant `/healthz` response schema and export runtime schemas for server
+- [x] Define the two-variant `/healthz` response schema and export runtime schemas for server
   parsing/serialization plus inferred/static types for consumers. Do not add room commands,
   views, credentials, or an accepted-room snapshot; the rooms protocol unit will extend this
   union once those types exist.
-- [ ] Use a `tsx` one-off command to parse a valid hello and reject missing token, empty token,
+- [x] Use a `tsx` one-off command to parse a valid hello and reject missing token, empty token,
   extra property, unknown type, and malformed error-code samples. Run typecheck, lint, build, and
   `git diff --check`; require success.
-- [ ] Inspect web imports and require that no web source imports these runtime schemas. Update
+- [x] Inspect web imports and require that no web source imports these runtime schemas. Update
   plan/progress and commit `feat(protocol): define connection handshake`.
 
 ---
