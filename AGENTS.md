@@ -18,6 +18,8 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
     server and web architecture, Nix package and NixOS module, order of work.
   - [Rooms subsystem](docs/rooms-subsystem-design.md): room state,
     identities, seating, readiness, presence, host transfer, persistence and protocol messages.
+  - [UI and visual design](docs/ui-visual-design.md): visual identity, responsive gameplay shell,
+    components, interactions, motion, screen families, accessibility and verification.
 - If the code disagrees with these docs, follow the docs and point out the mismatch. If a situation isn't covered, ask the user instead of inventing a rule. Update the docs when the user changes or adds a rule.
 - Keep this file up to date as the project grows: add the tech stack, how to run and test the app, the project layout, and any conventions, so the next session can pick up from there.
 

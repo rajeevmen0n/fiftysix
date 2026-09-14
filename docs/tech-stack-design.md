@@ -203,7 +203,8 @@ message.
     appealing** output that matches the app's visual style.
   - Generated files are committed under `apps/web/src/assets/`, with the prompt used recorded
     next to them so an asset can be regenerated in the same style.
-- The card art, fonts, colours and screen designs are decided in the UI brainstorm.
+- Card art, fonts, colours and screen designs are defined in
+  [the UI and visual design](ui-visual-design.md).
 
 ### 5.3 Animation queue (design §12.6)
 - A plain TypeScript module in `animation/`, outside components.
