@@ -21,6 +21,35 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
 - If the code disagrees with these docs, follow the docs and point out the mismatch. If a situation isn't covered, ask the user instead of inventing a rule. Update the docs when the user changes or adds a rule.
 - Keep this file up to date as the project grows: add the tech stack, how to run and test the app, the project layout, and any conventions, so the next session can pick up from there.
 
+## Agent workflow and context budget
+
+- The user has a small-tier subscription. Implementation plans use **self-contained work units**
+  that one session can finish, verify and commit. Sol, Terra and Luna may take moderately large
+  units when the work is cohesive; split work that crosses unrelated boundaries.
+- Use `docs/implementation-progress.md` as the cross-session ledger. At the start of implementation,
+  read this file, the relevant spec, and only the current plan unit plus its declared
+  dependencies. At the end of every unit, update its checkbox and the ledger in the same commit.
+- Use a fresh subagent for **every implementation unit**. The primary agent coordinates, supplies
+  the exact task and relevant paths, reviews the diff, runs final verification, and updates
+  progress. Use an isolated fork (`fork_turns: "none"`) so old conversation context is not copied.
+- Preferred primary-agent model: **`gpt-5.6-sol` with high reasoning effort**. Use the same model
+  and effort for primary verification.
+- Subagent routing:
+  - Most programming, plus security, concurrency, persistence and cross-boundary work:
+    `gpt-5.6-sol`, high effort.
+  - Narrow or highly specific coding work: `gpt-5.6-terra`, high effort.
+  - Trivial mechanical work only: `gpt-5.6-luna`, medium effort.
+  - Only the highest-priority work, especially important UI visuals and interactions:
+    `gpt-6-astra`, high effort. Keep every Astra unit very narrow—normally one component, one
+    responsive state, or one animation.
+- Work **strictly sequentially**. Never dispatch implementation units in parallel. Finish,
+  verify, record and commit the current unit, then ask the user before starting the next one.
+  Reviewer subagents stay read-only; only one implementer edits files at a time.
+- Use the Gemini MCP for every generated picture/image asset as required by Stack conventions.
+  Do not substitute another image generator, stock art, or placeholders.
+- If a unit cannot be completed in the current token budget, stop before unrelated expansion,
+  record the exact blocker and partial commit state in the ledger, and make the next unit smaller.
+
 ## Tech stack
 Chosen in the [tech stack spec](docs/tech-stack-design.md). The code
 doesn't exist yet: it's built in the order listed in that spec's §9, starting with the skeleton.

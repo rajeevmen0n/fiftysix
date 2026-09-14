@@ -337,7 +337,8 @@ Each step gets its own implementation plan.
    - web app that connects over WebSocket and shows the connection status
    - `nix build`, `nix run` and the NixOS module working
 2. **Engine** (engine spec).
-3. **Rooms subsystem** ([design](rooms-subsystem-design.md)): joining, rejoining,
-   seats, readiness, host, stalls, Table view PIN, persistence and the full message list.
+3. **Rooms subsystem** ([design](rooms-subsystem-design.md),
+   [implementation plan](rooms-subsystem-implementation-plan.md)): joining, rejoining, seats,
+   readiness, host, stalls, Table view PIN, persistence and the full message list.
 4. **UI and visual design**: brainstorm, then plan. Card art, fonts, colours, every screen and
    animation.

@@ -247,16 +247,17 @@ rooms design uses three logical tables:
 | Table | Purpose |
 |---|---|
 | `rooms` | Room ID and code, revision, serialized snapshot, creation/activity/expiry timestamps |
-| `room_updates` | Room revision, actor, command ID and canonical event batch |
+| `room_updates` | Room revision, actor, command ID, recorded outcome and canonical accepted event batch |
 | `access_tokens` | Token selector and digest, room, principal scope and optional player ID |
 
 Serialized values are encoded and decoded by the application rather than queried by SQL.
 Database-specific JSON operators are not used. Room deletion cascades through updates and
 tokens through adapter operations rather than relying on SQLite-only behavior.
 
-A uniqueness constraint on `(room ID, actor ID, command ID)` makes command deduplication durable.
-System transitions use stable system actor keys. Journal records live until their room is
-deleted.
+A uniqueness constraint on `(room ID, actor ID, command ID)` makes accepted and rejected command
+deduplication durable. A rejection records its code/current revision before the response but does
+not change the room snapshot. System transitions use stable system actor keys. Journal records
+live until their room is deleted.
 
 ### 6.2 Active rooms
 
