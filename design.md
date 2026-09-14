@@ -43,18 +43,26 @@ The create form also asks for the host's own name and optional PIN (§9).
 ## 3. Seating, dealer and sessions
 
 - Teammates sit in alternate seats (rules §2).
-- In the waiting room, players tap an empty seat to sit and can move freely. The host can move
-  or swap anyone, and remove anyone.
-- The session can start only when every seat is filled. There are no bots.
-- Seats **lock when the first session starts and stay fixed for the room's whole life**. After
-  that, a seat only changes hands through replacement (§10).
+- A room admits at most as many player identities as it has seats. Every new player joins
+  **unseated**, then taps an empty seat to sit.
+- Before the first match of each session, players can unseat and move themselves to empty seats.
+  The host can also move or swap anyone and remove anyone.
+- After the first match begins, players can't move themselves. Between matches, the host can
+  move or swap players between seats and teams. During a match, a seat changes hands only through
+  replacement (§10). Team, dealer order and game state belong to the numbered seat; a moved or
+  replacement player assumes that seat's position.
 - The first dealer of a session is **picked at random**, and the **host can change** it.
   After that, the deal rotates as described in rules §2.
-- **Between matches**, an end-of-match summary is shown and **every player must tap Ready**
-  before the next deal. The host can't skip this. A player who never taps Ready is handled like
-  a stall (§10).
+- The first match and every later match start **automatically** only when every seat is filled,
+  every player is connected, and **every player has tapped Ready**. There is no host Start
+  button. A seat change or first-dealer change clears everyone's Ready state. A temporary
+  disconnect preserves readiness but prevents the automatic start until the player reconnects.
+- Between matches, an end-of-match summary is shown before players Ready for the next deal. A
+  player who never taps Ready keeps the gate closed; the host may remove them before or between
+  matches.
 - When a team reaches 0 tokens, the session is over. The app shows who won and the host gets
-  **Restart session**, which resets both teams to the starting tokens and keeps the seats.
+  **Restart session**, which resets both teams to the starting tokens, unseats and unreadies
+  everyone, and returns to the pre-first-match seating phase.
 
 ## 4. Illegal-play mode
 
@@ -71,7 +79,7 @@ The create form also asks for the host's own name and optional PIN (§9).
   a blocked move, not a disqualification.
 - Players can't call out or flag an illegal play themselves. Only the app detects it.
 - The engine's exact behaviour is specified in
-  [docs/superpowers/specs/2026-09-14-game-engine-design.md](docs/superpowers/specs/2026-09-14-game-engine-design.md).
+  [docs/game-engine-design.md](docs/game-engine-design.md).
 
 ## 5. Surrender option
 
@@ -138,9 +146,12 @@ them surrender.
   (0/O, 1/I). Every room gets a link like `/?room=K7MQ4P`, which opens the home page with the
   code filled in.
 - **Names** must be unique within a room, ignoring case.
+- New identities always join unseated and count toward the room's player cap even while
+  disconnected or unseated.
 - **PIN**: optional, 4 digits, set when joining. It lasts as long as the room.
 - **Rejoining**:
-  - **Same browser**: a token stored in the browser puts the player straight back in their seat.
+  - **Same browser**: a token stored in the browser restores the player's existing identity and
+    seated or unseated state. A seated player returns to the same seat.
   - **Different browser or device**: the player must enter the **same name and PIN**.
     - If the player is still connected elsewhere, the new device **takes over** the seat and the
       old one is told it was signed in elsewhere.
@@ -152,8 +163,14 @@ them surrender.
 
 - **Stalls**: when a player disconnects, the match **pauses** and everyone sees who the table is
   waiting for. There are no turn timers. When the player rejoins, play continues.
-- During a stall the host can **Remove player**. The seat becomes open, and a new player who
-  joins with the room code takes it, **inheriting the hand, team and position**.
+- During a stall the host can **Remove player**. A new player joins unseated, chooses an empty
+  seat, inherits its hand, team and position, and must tap **Ready to resume** before play
+  continues. A returning identity always resumes its former seat without choosing again. During
+  an active match, the host can remove only a disconnected player; before or between matches the
+  host can remove anyone.
+- **Leave room** is permanent: it removes the identity, opens its seat and invalidates its
+  rejoin token. Closing the app or losing connectivity only disconnects the player and reserves
+  their identity and seat.
 - **End match**: the host can use it **at any time** during a match, with two options:
   - **Restart**: the match is cancelled, no tokens move, and the **same dealer redeals**, as with
     a redeal (rules §9).
@@ -163,8 +180,11 @@ them surrender.
     Only available once all auctions are over and play has started.
 - Host controls are also available in an unlocked **Table view** (§13).
 - **Host transfer**: if the host is disconnected longer than the **host transfer wait** setting,
-  host powers pass to the **next seated player counter-clockwise**. The old host doesn't get the
-  role back on return. Whoever holds the role can hand it to any seated player at any time.
+  host powers pass to the next **connected occupied seat counter-clockwise**, starting from the
+  host's current seat or last seat while unseated. If that isn't possible, they pass to the
+  earliest-joined connected player. The same fallback applies if the host has never taken a
+  seat. An intentional host departure transfers powers immediately. The old host doesn't get
+  the role back on return. Whoever holds the role can hand it to any seated player at any time.
 
 ## 11. Room lifetime and session log
 
@@ -190,8 +210,8 @@ them surrender.
 ### 12.3 Waiting room
 - The table is drawn with seats in team colours. Tap an empty seat to sit.
 - Share tools: copy link, copy code, and a QR code of the link.
-- Host controls: move, swap or remove players, choose the first dealer, and **Start** (enabled
-  once every seat is filled).
+- Host controls: move, swap or remove players, and choose the first dealer. The match starts
+  automatically once every seat is filled and every connected player is Ready.
 
 ### 12.4 Game page
 - **Status bar**: both teams' tokens, the winning bid with bid style, trump (when public), and
@@ -209,7 +229,7 @@ them surrender.
 - **Hand**: an overlapping fan sorted by suit, then rank. **Tap once to lift a card, tap it
   again to play it.** In Block mode, illegal cards are dimmed and can't be lifted.
 - **Menu**: session log, round history (per setting), live points (per setting), couch mode
-  toggle, reactions, leave.
+  toggle, reactions, and permanent Leave room.
 - **Phone portrait** stacks status bar, table, action area and hand. **Landscape and larger
   screens** put the table in the centre, the hand along the bottom, status on one side and
   actions on the other. On wide screens the session log stays open as a sidebar.
@@ -262,6 +282,7 @@ them surrender.
 - If the host set a **Table view PIN** when creating the room, opening the Table view needs the
   PIN, and an opened Table view gets the **host controls** (§10). If no PIN was set, anyone with
   the room code can open it, with host controls.
+- After 5 wrong Table view PIN attempts, Table authorization for the room is locked for 1 minute.
 - Landscape layout for TVs and laptops, readable from across a room: a large table with all
   seats, a top bar with tokens, winning bid, trump and double, and a side panel with the auction
   and session log.

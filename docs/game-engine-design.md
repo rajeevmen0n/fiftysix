@@ -1,7 +1,7 @@
 # Game engine design
 
-Design for the pure game engine of 56 and 28. It builds on [rules.md](../../../rules.md) (the
-game rules) and [design.md](../../../design.md) (app decisions). Section references like
+Design for the pure game engine of 56 and 28. It builds on [rules.md](../rules.md) (the
+game rules) and [design.md](../design.md) (app decisions). Section references like
 "rules §4" and "design §10" point to those files.
 
 This spec is **independent of the tech stack**. Names like `decide` and `playCard` describe

@@ -10,17 +10,19 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
 - Before any work that touches game logic, bidding, scoring, rooms or UI flow, read:
   - [rules.md](rules.md): the rules of 56 and 28. It is the source of truth for game logic.
   - [design.md](design.md): app decisions such as terminology, room settings, illegal-play modes, surrender option, visibility, joining and rejoining, host controls, UI layout, the Table view, the /debug page and what's out of scope for v1.
-- Design specs for individual parts of the app live in `docs/superpowers/specs/`. Read the
+- Design specs for individual parts of the app live in `docs/`. Read the
   relevant one before working on that part:
-  - [Game engine](docs/superpowers/specs/2026-09-14-game-engine-design.md): the pure engine for
+  - [Game engine](docs/game-engine-design.md): the pure engine for
     56 and 28 (state, actions, events, views, allowed actions).
-  - [Tech stack](docs/superpowers/specs/2026-09-14-tech-stack-design.md): stack, repo layout,
+  - [Tech stack](docs/tech-stack-design.md): stack, repo layout,
     server and web architecture, Nix package and NixOS module, order of work.
+  - [Rooms subsystem](docs/rooms-subsystem-design.md): room state,
+    identities, seating, readiness, presence, host transfer, persistence and protocol messages.
 - If the code disagrees with these docs, follow the docs and point out the mismatch. If a situation isn't covered, ask the user instead of inventing a rule. Update the docs when the user changes or adds a rule.
 - Keep this file up to date as the project grows: add the tech stack, how to run and test the app, the project layout, and any conventions, so the next session can pick up from there.
 
 ## Tech stack
-Chosen in the [tech stack spec](docs/superpowers/specs/2026-09-14-tech-stack-design.md). The code
+Chosen in the [tech stack spec](docs/tech-stack-design.md). The code
 doesn't exist yet: it's built in the order listed in that spec's §9, starting with the skeleton.
 Update this section when that changes.
 

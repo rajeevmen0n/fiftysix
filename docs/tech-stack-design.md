@@ -1,9 +1,9 @@
 # Tech stack design
 
 The tech stack, repo layout, server and web architecture, and Nix packaging for the app. It
-builds on [AGENTS.md](../../../AGENTS.md) (engineering conventions),
-[design.md](../../../design.md) (app decisions) and the
-[game engine spec](2026-09-14-game-engine-design.md).
+builds on [AGENTS.md](../AGENTS.md) (engineering conventions),
+[design.md](../design.md) (app decisions) and the
+[game engine spec](game-engine-design.md).
 
 ## 1. Goals and constraints
 
@@ -337,7 +337,7 @@ Each step gets its own implementation plan.
    - web app that connects over WebSocket and shows the connection status
    - `nix build`, `nix run` and the NixOS module working
 2. **Engine** (engine spec).
-3. **Rooms subsystem**: brainstorm, then plan. Joining, rejoining, seats, host, stalls, Table view
-   PIN, the full message list.
+3. **Rooms subsystem** ([design](rooms-subsystem-design.md)): joining, rejoining,
+   seats, readiness, host, stalls, Table view PIN, persistence and the full message list.
 4. **UI and visual design**: brainstorm, then plan. Card art, fonts, colours, every screen and
    animation.
