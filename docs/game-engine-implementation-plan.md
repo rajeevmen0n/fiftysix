@@ -99,7 +99,7 @@ the progress ledger.
 
 ---
 
-### [ ] E001: Define cards, seats, configuration, and stakes
+### [x] E001: Define cards, seats, configuration, and stakes
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -140,21 +140,21 @@ export function teamOf(seat: Seat): Team;
 export function stakeFor(config: EngineConfig, amount: number): StakeTier;
 ```
 
-- [ ] Encode rank order and points exactly as J/3, 9/2, A/1, 10/1, K/Q/8/7/0. Build 56 decks
+- [x] Encode rank order and points exactly as J/3, 9/2, A/1, 10/1, K/Q/8/7/0. Build 56 decks
   with two distinguishable copies and either ranks J–Q or J–7; build 28 with one copy of all
   eight ranks. Card equality includes copy, while rank comparison does not.
-- [ ] Implement counter-clockwise seat helpers with even seats on Team A and odd seats on Team B.
+- [x] Implement counter-clockwise seat helpers with even seats on Team A and odd seats on Team B.
   Reject out-of-range/non-integer seats at public boundaries rather than normalizing them.
-- [ ] Validate every config rule: game/player-count combinations; 28 requiring eights/sevens;
+- [x] Validate every config rule: game/player-count combinations; 28 requiring eights/sevens;
   56 card divisibility; starting tokens and every stake as whole numbers from 1–999; redeal
   threshold from zero through the game/player cap (56: 13/8/6 for 4/6/8 players; 28: 6); and
   ordered, gap-free, non-overlapping stake tiers covering exactly 28–56 or 14–28.
-- [ ] Implement tier lookup, multiplier application, affordability predicates for bid/double/
+- [x] Implement tier lookup, multiplier application, affordability predicates for bid/double/
   redouble, and capped token transfer that never produces a negative balance.
-- [ ] Run deterministic one-off checks for all valid deck sizes/configurations, total points,
+- [x] Run deterministic one-off checks for all valid deck sizes/configurations, total points,
   unique card identities, invalid player/card combinations, malformed tiers, alternating teams,
   seat wraparound, affordability, and capped transfers.
-- [ ] Run typecheck, lint, build, and `git diff --check`; require success. Inspect the engine's
+- [x] Run typecheck, lint, build, and `git diff --check`; require success. Inspect the engine's
   manifest/import graph for zero dependencies, update plan/progress, and commit
   `feat(engine): add cards configuration and stakes`.
 

@@ -7,29 +7,31 @@ implementation plans.
 
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
-| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Await user approval before E001 |
-| Pure engine | `docs/game-engine-implementation-plan.md` | Ready | E001 | Execute E001 after user approval |
+| Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
+| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E001 | Await user approval before E002 |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-S009 — Verify the integrated skeleton and hand off to engine implementation — this unit commit
-(`docs: complete repository skeleton`).
+E001 — Define cards, seats, configuration, and stakes — implementation commits
+`feat(engine): add cards configuration and stakes` and
+`fix(engine): reject unsupported team seats`.
 
-- Workspace verification: `pnpm build`, the final direct `pnpm typecheck` and `pnpm lint`,
-  `nix build`, and `nix flake check` succeeded on 2026-09-14. Flake evaluation returned package
-  derivations for exactly `aarch64-darwin`, `aarch64-linux`, and `x86_64-linux`; the host native
-  addon links to nixpkgs SQLite 3.51.2.
-- Runtime smoke: focused `tsx` harnesses covered configuration, first/idempotent migrations,
-  healthy/failed storage, and browser reconnect. The packaged server covered static assets, SPA
-  fallback, `/healthz`, reserved `/debug`, every bootstrap WebSocket rejection, token-safe logs,
-  and clean SIGTERM with an open socket, all against an explicit removed-after-use temporary DB.
-- Deployment and boundaries: the unchanged S008 NixOS evaluations cover disabled/default/custom,
-  firewall, credential, and hardening variants. A complete-tree `rg` audit found no dependency,
-  ambient-input, UI-string, secret, migration, fake-hash, or generated-artifact violations;
-  `git diff --check` also succeeded.
-- Next unit: E001, Define cards, seats, configuration, and stakes, after user approval.
+- Added the dependency-free engine's card, config, seat, and stake foundations. Deterministic
+  `tsx` checks covered all six valid deck/config variants, exact point totals and identities,
+  23 invalid configs, seat order and bounds, stake lookup and multipliers, affordability, capped
+  token transfer, and input immutability.
+- Independent review found `teamOf` accepted universally unsupported seat indices. Fix round 1
+  added the upper bound, its focused boundary harness passed, and scoped re-review found no new
+  breakage.
+- Primary verification on 2026-09-14: deterministic harnesses, `pnpm typecheck`, `pnpm lint`,
+  `pnpm build`, `git diff --check`, and the dependency/import audit all passed. The engine manifest
+  has no dependencies and its source imports remain package-local.
+- Deferred minor for the whole-engine review: exported card lookup constants are TypeScript
+  readonly but are not frozen at runtime.
+- Next unit: E002, Establish actions, events, state, and the transition kernel, after user
+  approval.
 
 ## Implementation readiness
 
