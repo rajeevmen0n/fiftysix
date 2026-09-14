@@ -430,7 +430,7 @@ export function createApp(dependencies: AppDependencies): Hono;
 
 ---
 
-### [ ] S006: Add the browser connection client and localized status screen
+### [x] S006: Add the browser connection client and localized status screen
 
 **Suggested implementer:** `gpt-5.6-terra`, high effort
 
@@ -464,23 +464,23 @@ export function createWebSocketClient(dependencies: {
 }): WebSocketClient;
 ```
 
-- [ ] Implement a transport client with explicit socket and scheduler dependencies, one active
+- [x] Implement a transport client with explicit socket and scheduler dependencies, one active
   socket, idempotent `connect`/`disconnect`, and capped exponential reconnect delays of 500,
   1,000, 2,000, 4,000, 8,000, then 10,000 ms. Reset the attempt after a successful open and do
   not reconnect after intentional disconnect.
-- [ ] Keep transport connection separate from room authentication. `connect()` opens `/ws` and
+- [x] Keep transport connection separate from room authentication. `connect()` opens `/ws` and
   reports status; `authenticate(token)` sends typed `hello` only on an open socket. The initial
   status screen has no token and therefore does not fabricate a room session.
-- [ ] Adapt the client into a small Zustand store created through a factory, not a global socket
+- [x] Adapt the client into a small Zustand store created through a factory, not a global socket
   singleton. Compose the production browser WebSocket and timeout adapters in `main.tsx`.
-- [ ] Initialize React 19, React Router, and i18next. Render one root route with the app identity
+- [x] Initialize React 19, React Router, and i18next. Render one root route with the app identity
   and an accessible live connection-status label; source every visible/accessibility string from
   `locales/en.json`. Keep styling structural and minimal because the approved UI plan owns final
   theme and components; add no image asset.
-- [ ] Run `pnpm dev`, open the page at narrow phone and desktop widths, stop/restart the server,
+- [x] Run `pnpm dev`, open the page at narrow phone and desktop widths, stop/restart the server,
   and confirm connected/reconnecting/disconnected transitions without layout overflow. Confirm
   no authentication message is sent without a token.
-- [ ] Run typecheck, lint, build, `rg` checks for hard-coded JSX strings and forbidden runtime
+- [x] Run typecheck, lint, build, `rg` checks for hard-coded JSX strings and forbidden runtime
   imports, and `git diff --check`; require success. Update plan/progress and commit
   `feat(web): show connection status`.
 

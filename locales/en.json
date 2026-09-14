@@ -1,0 +1,14 @@
+{
+  "app": {
+    "identity": "56"
+  },
+  "connection": {
+    "statusLabel": "Connection status: {{status}}",
+    "status": {
+      "connecting": "Connecting",
+      "connected": "Connected",
+      "reconnecting": "Reconnecting",
+      "disconnected": "Disconnected"
+    }
+  }
+}
