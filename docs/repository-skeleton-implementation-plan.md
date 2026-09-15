@@ -28,12 +28,18 @@ Zustand, i18next, esbuild, Nixpkgs 26.05.
 - Read `AGENTS.md`, `docs/implementation-progress.md`, this header, the current unit, its
   `Depends on` entries, and `docs/tech-stack-design.md`. A unit that changes room or UI behavior
   also reads `rules.md`, `design.md`, and the relevant subsystem design before editing.
-- Work strictly sequentially. Dispatch exactly one fresh implementation subagent for the current
-  unit with `fork_turns: "none"`. After primary review and verification, stop and ask the user
-  before starting the next unit.
-- Use `gpt-5.6-sol` at high effort for the primary agent, server, persistence, Nix, and final
-  verification. Use `gpt-5.6-terra` at high effort for a narrow protocol or browser unit. No unit
-  in this plan needs Astra, generated imagery, or parallel implementation.
+- Work strictly sequentially. Use Claude Sonnet or GPT `gpt-5.6-terra` at high effort for the
+  main agent. Dispatch exactly one implementation agent for the current unit with an isolated
+  initial fork (`fork_turns: "none"`) and the suggested Claude/GPT model pair below. When its
+  initial implementation is ready, dispatch exactly one Claude Opus or GPT `gpt-5.6-sol` review
+  agent at high effort.
+- **Keep the implementation and review agents available until the unit is completely finished.**
+  Send every review correction back to the same implementer and every corrected diff back to the
+  same reviewer; never create replacement agents for later iterations. After reviewer approval
+  and main-agent verification, stop and ask the user before starting the next unit.
+- Use Claude Opus or GPT `gpt-5.6-sol` for server, persistence, and Nix implementation; use Claude
+  Sonnet or GPT `gpt-5.6-terra` for narrow protocol or browser implementation. No unit in this
+  plan needs Claude Fable / GPT `gpt-6-astra`, generated imagery, or parallel implementation.
 - Tests are not required solely for coverage, and no broad test framework is added preemptively.
   Use compiler, formatter/linter, build, evaluation, and direct process/browser/socket checks when
   they need no custom verification code. If a check requires executable scenarios, assertions,
@@ -65,7 +71,8 @@ Every numbered unit is intended to finish, verify, and commit within one session
 set the repository-skeleton row and unit to `In progress` in `docs/implementation-progress.md`.
 At completion:
 
-1. The primary agent inspects the complete diff and reruns the unit's verification commands.
+1. The retained review agent approves the complete diff, then the main agent reruns the unit's
+   verification commands.
 2. Change the unit heading from `[ ]` to `[x]`.
 3. Record the commit, verification evidence, and next unit in `docs/implementation-progress.md`.
 4. Include the plan checkbox and progress update in the same unit commit.
@@ -135,7 +142,7 @@ a duplicate.
 
 ### [x] S001: Establish the reproducible workspace and package graph
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `.gitignore`
@@ -217,7 +224,7 @@ a duplicate.
 
 ### [x] S002: Define the bootstrap connection protocol
 
-**Suggested implementer:** `gpt-5.6-terra`, high effort
+**Suggested implementer:** Claude Sonnet or GPT `gpt-5.6-terra`, high effort
 
 **Files:**
 - Create: `packages/protocol/src/connection.ts`
@@ -269,7 +276,7 @@ export const healthResponseSchema: z.ZodType<HealthResponse>;
 
 ### [x] S003: Add configuration and injected runtime primitives
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/config.ts`
@@ -326,7 +333,7 @@ export interface Scheduler {
 
 ### [x] S004: Establish the swappable storage boundary and migration baseline
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/storage/storage.ts`
@@ -372,7 +379,7 @@ export function createStorageFactory(): StorageFactory;
 
 ### [x] S005: Implement the HTTP and WebSocket server edge
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/app.ts`
@@ -433,7 +440,7 @@ export function createApp(dependencies: AppDependencies): Hono;
 
 ### [x] S006: Add the browser connection client and localized status screen
 
-**Suggested implementer:** `gpt-5.6-terra`, high effort
+**Suggested implementer:** Claude Sonnet or GPT `gpt-5.6-terra`, high effort
 
 **Files:**
 - Create: `apps/web/src/net/websocket-client.ts`
@@ -489,7 +496,7 @@ export function createWebSocketClient(dependencies: {
 
 ### [x] S007: Compose production serving and graceful shutdown
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/runtime/shutdown.ts`
@@ -548,7 +555,7 @@ export async function startServer(config: AppConfig): Promise<RunningServer>;
 
 ### [x] S008: Complete the Nix package, app, checks, and NixOS module
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `flake.nix`
@@ -613,7 +620,7 @@ services.fiftysix = {
 
 ### [x] S009: Verify the integrated skeleton and hand off to engine implementation
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `AGENTS.md`

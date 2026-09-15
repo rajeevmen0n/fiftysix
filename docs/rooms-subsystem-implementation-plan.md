@@ -27,15 +27,19 @@ downstream-interface, and completeness review.
 - Read `AGENTS.md`, `docs/implementation-progress.md`, this header, the current task, its declared
   dependencies, and `docs/rooms-subsystem-design.md`. Tasks that touch the engine also require
   `rules.md`, `design.md`, and `docs/game-engine-design.md`.
-- Work strictly sequentially. Dispatch exactly one fresh implementation subagent for the current
-  task with `fork_turns: "none"`. After primary review and verification, ask the user before the
-  next task.
-- Use `gpt-5.6-sol` at high effort for the primary agent, most programming subagents, and final
-  verification. Use `gpt-5.6-terra` at high effort only where a task is narrow and specific. Use
-  `gpt-5.6-luna` only for trivial mechanical work.
-- No task in this plan needs Astra or image generation. Future high-priority UI tasks use
-  `gpt-6-astra` at high effort, stay narrowly scoped, and use Gemini MCP for every generated image
-  asset.
+- Work strictly sequentially. Use Claude Sonnet or GPT `gpt-5.6-terra` at high effort for the
+  main agent. Dispatch exactly one implementation agent for the current task with an isolated
+  initial fork (`fork_turns: "none"`) and the suggested Claude/GPT model pair below. When its
+  initial implementation is ready, dispatch exactly one Claude Opus or GPT `gpt-5.6-sol` review
+  agent at high effort.
+- **Keep the implementation and review agents available until the task is completely finished.**
+  Send every review correction back to the same implementer and every corrected diff back to the
+  same reviewer; never create replacement agents for later iterations. After reviewer approval
+  and main-agent verification, ask the user before the next task.
+- Use Claude Opus or GPT `gpt-5.6-sol` for most programming and Claude Sonnet or GPT
+  `gpt-5.6-terra` only where a task is narrow and specific. No task in this plan needs Claude
+  Fable / GPT `gpt-6-astra` or image generation. Future high-priority UI tasks may use that pair
+  at high effort, remain narrowly scoped, and use Gemini MCP for every generated image asset.
 - Tests are not required solely for coverage, and no broad test framework is added preemptively.
   Use typecheck, lint, build, and direct manual scenarios when sufficient. If verification
   requires executable scenarios, assertions, fakes, fixtures, or a custom harness, commit it as a
@@ -58,7 +62,8 @@ into an unrelated boundary, stop and split it before coding.
 
 At task start, set the task to `In progress` in `docs/implementation-progress.md`. At completion:
 
-1. The primary agent inspects the entire diff and reruns the task's verification commands.
+1. The retained review agent approves the entire diff, then the main agent reruns the task's
+   verification commands.
 2. Change the task heading from `[ ]` to `[x]`.
 3. Record the commit, verification, and next task in `docs/implementation-progress.md`.
 4. Include the plan and progress updates in the same task commit.
@@ -95,7 +100,7 @@ of creating a duplicate.
 
 ### [ ] R001: Define the complete rooms protocol
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/protocol/src/rooms/model.ts`
@@ -169,7 +174,7 @@ export interface RoomView {
 
 ### [ ] R002: Implement the pure room aggregate and seating/readiness policy
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/types.ts`
@@ -243,7 +248,7 @@ export type DomainResult =
 
 ### [ ] R003: Implement presence, replacement, and host succession policy
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/presence.ts`
@@ -282,7 +287,7 @@ export function applyHostDeadline(state: RoomSnapshot, hostId: PlayerId, deadlin
 
 ### [ ] R004: Implement credential primitives
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/credentials.ts`
@@ -320,7 +325,7 @@ export function pinIsLocked(value: PinCredential, now: number): boolean;
 
 ### [ ] R005: Implement the room storage contract and SQLite adapter
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/storage/room-storage.ts`
@@ -369,7 +374,7 @@ export interface RoomStorage {
 
 ### [ ] R006: Implement identity and Table access flows
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/access-service.ts`
@@ -418,7 +423,7 @@ export class AccessService {
 
 ### [ ] R007: Implement capabilities, personalized views, and redaction
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/capabilities.ts`
@@ -456,7 +461,7 @@ export function redactRoomEvents(
 
 ### [ ] R008: Implement room queues, connection ownership, and scheduling
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/room-manager.ts`
@@ -509,7 +514,7 @@ export class RoomScheduler {
 
 ### [ ] R009: Implement room commands and engine orchestration
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/shuffle.ts`
@@ -565,7 +570,7 @@ export type AuthenticatedPlayer = AuthenticatedPrincipal & {
 
 ### [ ] R010: Implement room directory and HTTP routes
 
-**Suggested implementer:** `gpt-5.6-terra`, high effort
+**Suggested implementer:** Claude Sonnet or GPT `gpt-5.6-terra`, high effort
 
 **Files:**
 - Create: `apps/server/src/rooms/room-directory.ts`
@@ -608,7 +613,7 @@ export class RoomDirectory {
 
 ### [ ] R011: Implement the authenticated room WebSocket edge
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/server/src/ws/room-socket.ts`
@@ -639,7 +644,7 @@ export function createRoomSocketHandler(dependencies: RoomSocketDependencies): W
 
 ### [ ] R012: Implement startup recovery, expiry sweep, and shutdown
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `apps/server/src/rooms/room-manager.ts`
@@ -674,7 +679,7 @@ export async function startRoomRuntime(dependencies: RoomRuntimeDependencies): P
 
 ### [ ] R013: Implement the typed browser room client and Zustand store
 
-**Suggested implementer:** `gpt-5.6-terra`, high effort
+**Suggested implementer:** Claude Sonnet or GPT `gpt-5.6-terra`, high effort
 
 **Files:**
 - Create: `apps/web/src/net/room-client.ts`
@@ -716,7 +721,7 @@ export interface RoomStoreState {
 
 ### [ ] R014: Verify the integrated rooms subsystem and hand it off to U001
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `AGENTS.md`

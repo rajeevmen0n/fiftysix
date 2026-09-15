@@ -30,11 +30,17 @@ animation, accessibility, asset-provenance, type-interface, and completeness rev
   `docs/implementation-progress.md`, this header, the current unit, and its declared dependencies.
   Units touching game presentation also read `rules.md` and `docs/game-engine-design.md`; units
   touching room flows also read `docs/rooms-subsystem-design.md`.
-- Work strictly sequentially with one fresh implementation subagent per unit using
-  `fork_turns: "none"`. Use the exact suggested routing below, then primary-review and verify with
-  `gpt-5.6-sol` at high effort. Stop and ask the user after every completed unit.
-- Astra units are deliberately narrow: one asset family, component, responsive state, or motion
-  family. Do not expand an Astra unit into adjacent screens or infrastructure.
+- Work strictly sequentially. Use Claude Sonnet or GPT `gpt-5.6-terra` at high effort for the
+  main agent. Dispatch one implementation agent with an isolated initial fork
+  (`fork_turns: "none"`) using the exact suggested Claude/GPT model pair below. When its initial
+  implementation is ready, dispatch one Claude Opus or GPT `gpt-5.6-sol` review agent at high
+  effort.
+- **Keep the implementation and review agents available until the unit is completely finished.**
+  Send every review correction back to the same implementer and every corrected diff back to the
+  same reviewer; never create replacement agents for later iterations. After reviewer approval
+  and main-agent verification, stop and ask the user after every completed unit.
+- Claude Fable / GPT `gpt-6-astra` units are deliberately narrow: one asset family, component,
+  responsive state, or motion family. Do not expand one into adjacent screens or infrastructure.
 - Tests, stories, and snapshots are not required solely for coverage, and no broad test/story
   framework is added preemptively. Use typecheck, lint, build, real room/debug flows, browser
   inspection, and the responsive/accessibility matrix where sufficient. If verification requires
@@ -68,7 +74,8 @@ animation, accessibility, asset-provenance, type-interface, and completeness rev
 At unit start, set the UI row and unit to `In progress` in
 `docs/implementation-progress.md`. At completion:
 
-1. The primary agent reviews the entire diff and reruns the unit's verification commands.
+1. The retained review agent approves the entire diff, then the main agent reruns the unit's
+   verification commands.
 2. Change the unit heading from `[ ]` to `[x]`.
 3. Record the commit, visual/manual evidence, and next unit in the progress ledger.
 4. Commit implementation, plan checkbox, prompt records when applicable, and ledger update
@@ -114,7 +121,7 @@ substitution in the ledger rather than creating duplicate state or network clien
 
 ### [ ] U001: Establish the visual foundation and UI runtime
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `apps/web/package.json`
@@ -156,7 +163,7 @@ export const uiMotionConfig = {reducedMotion: "user" as const};
 
 ### [ ] U002: Generate the brand and surface asset family
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/assets/brand/logo-56.png`
@@ -210,7 +217,7 @@ match the app’s calm contemporary broadcast-table visual style.
 
 ### [ ] U003: Generate the card-art asset family
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/assets/cards/card-back.png`
@@ -269,7 +276,7 @@ facial detail. Produce an isolated transparent asset matching the approved visua
 
 ### [ ] U004: Build the accessible Card component
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/Card.tsx`
@@ -311,7 +318,7 @@ export function Card(props: CardProps): React.JSX.Element;
 
 ### [ ] U005: Implement pure responsive layout and control models
 
-**Suggested implementer:** `gpt-5.6-terra`, high effort
+**Suggested implementer:** Claude Sonnet or GPT `gpt-5.6-terra`, high effort
 
 **Files:**
 - Create: `apps/web/src/logic/card-layout.ts`
@@ -354,7 +361,7 @@ export function controlModel(view: RoomView): ControlModel;
 
 ### [ ] U006: Build the phone-portrait gameplay shell
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/GameShell.tsx`
@@ -388,7 +395,7 @@ export interface GameShellProps {
 
 ### [ ] U007: Add landscape, tablet, and desktop shell states
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Modify: `apps/web/src/components/GameShell.tsx`
@@ -413,7 +420,7 @@ TypeScript interface.
 
 ### [ ] U008: Build the Seat component
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/Seat.tsx`
@@ -452,7 +459,7 @@ export interface SeatProps {
 
 ### [ ] U009: Build TableSurface and StatusStrip
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/TableSurface.tsx`
@@ -485,7 +492,7 @@ export function StatusStrip(props: {view: RoomView; compact: boolean}): React.JS
 
 ### [ ] U010: Build the Hand interaction component
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/Hand.tsx`
@@ -522,7 +529,7 @@ export interface HandProps {
 
 ### [ ] U011: Build ActionDock and accessible overlay primitives
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/ActionDock.tsx`
@@ -558,7 +565,7 @@ export interface GameOverlayProps {kind: "stall" | "vote" | "recovery"; children
 
 ### [ ] U012: Implement entry APIs, routing, and Home
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/web/src/net/room-api.ts`
@@ -613,7 +620,7 @@ export interface GameRouteProps {mode: "player" | "table";}
 
 ### [ ] U013: Build the interactive lobby
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/screens/Lobby.tsx`
@@ -645,7 +652,7 @@ export interface LobbyProps {view: RoomView; send(command: RoomCommand): string;
 
 ### [ ] U014: Build AuctionControls
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/AuctionControls.tsx`
@@ -681,7 +688,7 @@ export interface AuctionControlsProps {
 
 ### [ ] U015: Implement card placement, reveal, and play interaction
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Modify: `apps/web/src/screens/Game.tsx`
@@ -716,7 +723,7 @@ export interface GameProps {view: RoomView; pending: Readonly<Record<string, Roo
 
 ### [ ] U016: Implement stall and surrender overlays
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `apps/web/src/components/GameOverlay.tsx`
@@ -746,7 +753,7 @@ commands.
 
 ### [ ] U017: Implement menus, history, reactions, and host controls
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `apps/web/src/screens/Game.tsx`
@@ -776,7 +783,7 @@ commands.
 
 ### [ ] U018: Build match and session summaries
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/components/MatchSummary.tsx`
@@ -811,7 +818,7 @@ export function SessionSummary(props: {view: RoomView; restartAllowed: boolean; 
 
 ### [ ] U019: Add Couch mode
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/screens/Couch.tsx`
@@ -843,7 +850,7 @@ export interface UiStoreState {couchMode: boolean; setCouchMode(enabled: boolean
 
 ### [ ] U020: Add the TV-oriented Table view
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/screens/Table.tsx`
@@ -873,7 +880,7 @@ export interface TableScreenProps {view: RoomView; send(command: RoomCommand): s
 
 ### [ ] U021: Implement the authoritative animation queue
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/web/src/animation/types.ts`
@@ -922,7 +929,7 @@ export interface AnimationQueue {
 
 ### [ ] U022: Animate dealing
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/animation/steps/deal.ts`
@@ -953,7 +960,7 @@ export const animateDeal: AnimationStep;
 
 ### [ ] U023: Animate card play, round collection, and trump movement
 
-**Suggested implementer:** `gpt-6-astra`, high effort
+**Suggested implementer:** Claude Fable or GPT `gpt-6-astra`, high effort
 
 **Files:**
 - Create: `apps/web/src/animation/steps/card-play.ts`
@@ -990,7 +997,7 @@ export const animateTrump: AnimationStep;
 
 ### [ ] U024: Animate calls, reactions, and results
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `apps/web/src/animation/steps/transient.ts`
@@ -1025,7 +1032,7 @@ export const animateResult: AnimationStep;
 
 ### [ ] U025: Implement recovery screens and client error boundaries
 
-**Suggested implementer:** `gpt-5.6-terra`, high effort
+**Suggested implementer:** Claude Sonnet or GPT `gpt-5.6-terra`, high effort
 
 **Files:**
 - Create: `apps/web/src/screens/Recovery.tsx`
@@ -1059,7 +1066,7 @@ export type RecoveryReason = "roomExpired" | "removed" | "signedInElsewhere" | "
 
 ### [ ] U026: Implement the protected in-memory debug service and protocol
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/protocol/src/debug/http.ts`
@@ -1124,7 +1131,7 @@ export type DebugSource = {type: "seat"; seat: number} | {type: "host"};
 
 ### [ ] U027: Build the Debug screen
 
-**Suggested implementer:** `gpt-5.6-terra`, high effort
+**Suggested implementer:** Claude Sonnet or GPT `gpt-5.6-terra`, high effort
 
 **Files:**
 - Create: `apps/web/src/net/debug-client.ts`
@@ -1160,7 +1167,7 @@ export interface DebugClient {login(password: string): Promise<void>; create(con
 
 ### [ ] U028: Verify the complete UI and hand off v1
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `AGENTS.md`

@@ -28,9 +28,14 @@ completeness review.
 - Every unit reads `AGENTS.md`, `rules.md`, `design.md`, `docs/game-engine-design.md`,
   `docs/implementation-progress.md`, this header, the current unit, and its declared
   dependencies. The rules document wins over every other artifact.
-- Work strictly sequentially with one fresh implementation subagent per unit using
-  `fork_turns: "none"`. Use `gpt-5.6-sol` at high effort for every engine unit and primary
-  verification. Stop and ask the user after each completed unit.
+- Work strictly sequentially. Use Claude Sonnet or GPT `gpt-5.6-terra` at high effort for the
+  main agent. Dispatch one Claude Opus or GPT `gpt-5.6-sol` implementation agent at high effort
+  for each engine unit, using an isolated initial fork (`fork_turns: "none"`), then dispatch one
+  Claude Opus or GPT `gpt-5.6-sol` review agent at high effort.
+- **Keep both agents available until the unit is completely finished.** Send every review finding
+  back to the same implementer and every corrected diff back to the same reviewer; never replace
+  either agent during correction and re-review rounds. After reviewer approval and main-agent
+  verification, stop and ask the user before starting the next unit.
 - Tests are not required solely for coverage, and no broad test framework is added preemptively.
   Use typecheck, lint, build, exhaustive-type checks, and direct inspection where sufficient. If
   verification requires deterministic scenarios, assertions, fakes, fixtures, replay code, or a
@@ -57,7 +62,8 @@ completeness review.
 At unit start, set the engine row and unit to `In progress` in
 `docs/implementation-progress.md`. At completion:
 
-1. The primary agent reviews the entire diff and reruns the unit's verification commands.
+1. The retained review agent approves the entire diff, then the main agent reruns the unit's
+   verification commands.
 2. Change the unit heading from `[ ]` to `[x]`.
 3. Record the commit, evidence, and next unit in `docs/implementation-progress.md`.
 4. Commit the implementation, plan checkbox, and ledger update together.
@@ -102,7 +108,7 @@ the progress ledger.
 
 ### [x] E001: Define cards, seats, configuration, and stakes
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/types.ts`
@@ -163,7 +169,7 @@ export function stakeFor(config: EngineConfig, amount: number): StakeTier;
 
 ### [x] E002: Establish actions, events, state, and the transition kernel
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/actions.ts`
@@ -244,7 +250,7 @@ export function act(state: EngineState, action: EngineAction): ActionResult;
 
 ### [x] E003: Implement dealing and automatic redeals
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/deal.ts`
@@ -291,7 +297,7 @@ export function redealReason(holdings: readonly (readonly Card[])[], threshold: 
 
 ### [ ] E004: Implement the shared auction and complete 56 contracts
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/auction.ts`
@@ -335,7 +341,7 @@ export function contractMultiplier(auction: AuctionState): 1 | 2 | 4;
 
 ### [ ] E005: Implement 28 auctions, face-down placement, and second deal
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/hidden-trump.ts`
@@ -387,7 +393,7 @@ export function faceDownIsForced(state: EngineState, seat: Seat): boolean;
 
 ### [ ] E006: Implement scoring, host resolutions, and session transitions
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/scoring.ts`
@@ -440,7 +446,7 @@ export function decideSessionAction(state: EngineState, action: EngineAction): D
 
 ### [ ] E007: Implement card play, hidden-trump reveal, and disqualification
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/play.ts`
@@ -489,7 +495,7 @@ export function decidePlayAction(state: EngineState, action: EngineAction): Deci
 
 ### [ ] E008: Implement result certainty and surrender voting
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/surrender.ts`
@@ -529,7 +535,7 @@ export function decideSurrenderAction(state: EngineState, action: EngineAction):
 
 ### [ ] E009: Implement capabilities, views, and event redaction
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Create: `packages/engine/src/views.ts`
@@ -616,7 +622,7 @@ export function redactEvent(
 
 ### [ ] E010: Verify the complete engine and hand off to rooms
 
-**Suggested implementer:** `gpt-5.6-sol`, high effort
+**Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
 **Files:**
 - Modify: `AGENTS.md`

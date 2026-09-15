@@ -28,27 +28,38 @@ A web app for **56**, a card game played in Kerala, India, and its variant **28*
 - Do not load or invoke `superpowers:*` process skills for normal work in this repository unless
   the user explicitly requests one. Follow the lightweight develop-and-review loop below instead.
 - The user has a small-tier subscription. Implementation plans use **self-contained work units**
-  that one session can finish, verify and commit. Sol, Terra and Luna may take moderately large
-  units when the work is cohesive; split work that crosses unrelated boundaries.
+  that one session can finish, verify and commit. Keep units cohesive and split work that crosses
+  unrelated boundaries.
 - Use `docs/implementation-progress.md` as the cross-session ledger. At the start of implementation,
   read this file, the relevant spec, and only the current plan unit plus its declared
   dependencies. At the end of every unit, update its checkbox and the ledger in the same commit.
-- **Develop:** use one fresh subagent for the current implementation unit with the exact task and
-  relevant paths. Use an isolated fork (`fork_turns: "none"`) so old conversation context is not
-  copied.
-- **Review:** the primary agent reviews the diff, sends any focused corrections back to the same
-  implementer, runs final verification, then updates the plan checkbox and progress ledger in the
-  same commit.
-- Preferred primary-agent model: **`gpt-5.6-sol` with high reasoning effort**. Use the same model
-  and effort for primary verification.
-- Subagent routing:
-  - Most programming, plus security, concurrency, persistence and cross-boundary work:
-    `gpt-5.6-sol`, high effort.
-  - Narrow or highly specific coding work: `gpt-5.6-terra`, high effort.
-  - Trivial mechanical work only: `gpt-5.6-luna`, medium effort.
-  - Only the highest-priority work, especially important UI visuals and interactions:
-    `gpt-6-astra`, high effort. Keep every Astra unit very narrow—normally one component, one
-    responsive state, or one animation.
+- **Main agent:** coordinate the unit with **Claude Sonnet or GPT `gpt-5.6-terra`**, at high
+  reasoning effort. It supplies the exact task and relevant paths, mediates the implement/review
+  loop, runs final verification, and updates the plan checkbox and progress ledger in the same
+  commit.
+- **Implement:** create one implementation agent for the current unit with an isolated initial
+  fork (`fork_turns: "none"`). Choose its model according to the work:
+  - **Claude Sonnet or GPT `gpt-5.6-terra`**, high effort, for narrow or highly specific coding.
+  - **Claude Opus or GPT `gpt-5.6-sol`**, high effort, for most programming and for security,
+    concurrency, persistence, game logic, or cross-boundary work.
+  - **Claude Fable or GPT `gpt-6-astra`**, high effort, only for the highest-priority visual and
+    interaction work. Keep these units very narrow—normally one component, one responsive state,
+    or one animation.
+- Whenever an implementation plan or spec recommends a model, name both equivalents together:
+  Sonnet/Terra, Opus/Sol, or Fable/Astra. Do not leave a GPT-only or Claude-only recommendation.
+- **Review:** after the initial implementation is ready, create one review agent using **Claude
+  Opus or GPT `gpt-5.6-sol`**, at high effort. The reviewer inspects the complete diff and reports
+  concrete findings to the main agent; the main agent sends focused corrections back to the same
+  implementation agent.
+- **IMPORTANT — reuse both agents until the unit is complete.** Do not close, interrupt, replace,
+  or recreate the implementation or review agent after either finishes a turn. Keep both
+  available and use follow-up turns with the same agents for every correction and re-review. For
+  example, if the reviewer finds problems in the initial implementation, send those problems back
+  to the original implementer; after it fixes them, ask the original reviewer to review the new
+  diff. Creating a new implementer would waste context and tokens rebuilding implementation
+  knowledge, and creating a new reviewer from scratch would waste context and tokens learning the
+  earlier findings and changes again. The unit is complete only after the same reviewer approves
+  the corrected diff and the main agent finishes verification, bookkeeping, and the commit.
 - Work **strictly sequentially**. Never dispatch implementation units in parallel. Finish,
   verify, record and commit the current unit, then ask the user before starting the next one.
   Only one implementer edits files at a time.

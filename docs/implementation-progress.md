@@ -82,6 +82,7 @@ ledger in the same commit, then stops for user approval before the next unit.
 2. Read this file.
 3. Read the relevant design spec.
 4. Read only the current plan unit and the units named in its `Depends on` field.
-5. Dispatch the unit to the plan's suggested fresh subagent.
-6. Review the diff and run the unit's verification commands in the primary session.
+5. Dispatch the unit to its suggested implementation agent and keep that agent available.
+6. Dispatch review to a Claude Opus or GPT Sol review agent; reuse both agents for every
+   correction and re-review, then run the unit's verification commands in the main session.
 7. Mark the unit complete here and in its plan, record the commit, and name the next unit.
