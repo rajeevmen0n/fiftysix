@@ -242,7 +242,7 @@ export function act(state: EngineState, action: EngineAction): ActionResult;
 
 ---
 
-### [ ] E003: Implement dealing and automatic redeals
+### [x] E003: Implement dealing and automatic redeals
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -267,24 +267,24 @@ export type RedealReason =
 export function redealReason(holdings: readonly (readonly Card[])[], threshold: number): RedealReason | null;
 ```
 
-- [ ] Validate exact multiset equality with `buildDeck(config)`: reject missing, duplicate,
+- [x] Validate exact multiset equality with `buildDeck(config)`: reject missing, duplicate,
   foreign, wrong-copy, or extra cards as `invalidDeck` without exposing deck contents in details.
-- [ ] Deal one card at a time starting at `dealer + 1`, wrapping counter-clockwise. For 56, deal
+- [x] Deal one card at a time starting at `dealer + 1`, wrapping counter-clockwise. For 56, deal
   the complete deck; for 28, put the first four cards per seat in hands and the remaining four per
   seat in ordered `undealt` storage.
-- [ ] After a 56 deal, check team-without-Jack first and then low hands in seat order for a stable
+- [x] After a 56 deal, check team-without-Jack first and then low hands in seat order for a stable
   redeal reason. Emit `dealt`, then `redealt(reason)` and `matchEnded(redealt)` when applicable;
   keep the same dealer, move no tokens, return to `awaitingDeal(redeal)`, and do not append the
   transient 56 redeal to `matchLog`.
-- [ ] When 56 does not redeal, create the match state and emit `auctionStarted(56, dealer + 1,
+- [x] When 56 does not redeal, create the match state and emit `auctionStarted(56, dealer + 1,
   28)`. For 28, emit the first-stage deal and `auctionStarted(28-first, dealer + 1, 14)` without a
   redeal check until the second four cards are dealt.
-- [ ] Extend card-location invariants to cover hands, `undealt`, current/finished rounds, and
+- [x] Extend card-location invariants to cover hands, `undealt`, current/finished rounds, and
   face-down storage with each configured card in exactly one place.
-- [ ] Add and run deterministic automated tests for every supported player/deck size, first/last
+- [x] Add and run deterministic automated tests for every supported player/deck size, first/last
   card seat, invalid multisets, each redeal reason, reason precedence, same-dealer redeal, and 28
   first-deal deferral.
-- [ ] Run typecheck, lint, build, replay checks for every scenario, and `git diff --check`; require
+- [x] Run typecheck, lint, build, replay checks for every scenario, and `git diff --check`; require
   success. Update plan/progress and commit `feat(engine): deal cards and detect redeals`.
 
 ---

@@ -4,7 +4,9 @@ import {
   type EngineActionType,
   isEngineActionType,
 } from "./actions.js";
-import type { EngineEvent } from "./events.js";
+import { decideDeal, evolveAuctionStarted, evolveDealt } from "./deal.js";
+import type { EngineEvent, MatchEndedEvent } from "./events.js";
+import { evolveRedealt } from "./redeal.js";
 import {
   type ActionResult,
   assertNever,
@@ -93,7 +95,7 @@ function unsupportedAction(
 function routeAction(state: EngineState, action: EngineAction): Decision {
   switch (action.type) {
     case "deal":
-      return unsupportedAction(state, action);
+      return decideDeal(state, action);
     case "bid":
     case "pass":
     case "double":
@@ -146,16 +148,85 @@ function missingEvolver(_state: EngineState, event: EngineEvent): never {
   throw new Error(`No evolver is registered for engine event ${event.type}`);
 }
 
+/**
+ * Placeholder for a `MatchOutcome` variant no unit has implemented yet.
+ * Named after the outcome so a later unit gets a clear compile-time
+ * reminder (via the call site's exhaustiveness switch) and a clear runtime
+ * message naming exactly which outcome still needs its evolver.
+ */
+function outcomeNotYetImplemented(outcomeType: string): never {
+  throw new Error(`Match outcome not yet implemented: ${outcomeType}`);
+}
+
+/**
+ * Design §7.1/§10.3: only the automatic `redealt` outcome is reachable via
+ * `decide()` in this unit (56 after the deal, 28 after the second deal —
+ * §7.1). A 56 redeal is a transient notice: the phase reset, unchanged
+ * dealer and unchanged tokens are all carried by this event, so its summary
+ * is not appended to `matchLog`. A 28 redeal is appended because its first
+ * auction already occurred; its summary carries the public first-auction
+ * facts and zero token movement.
+ *
+ * Every other `MatchOutcome` (`made`, `failed`, `disqualified`,
+ * `surrendered`, `awarded`, `restarted`) belongs to later units (scoring,
+ * surrender, host `endMatch`) that also own the `matchOver`/`sessionOver`
+ * phase transitions and the paired `sessionEnded` event (design §10.4) — so
+ * they throw here rather than being half-implemented ahead of that work.
+ * The switch below is exhaustive at the type level (see `assertNever`'s
+ * default case): adding a new `MatchOutcome` variant without a case here
+ * fails compilation.
+ */
+function evolveMatchEnded(
+  state: EngineState,
+  event: MatchEndedEvent,
+): EngineState {
+  const { summary } = event;
+  const { outcome } = summary;
+
+  switch (outcome.type) {
+    case "made":
+    case "failed":
+    case "disqualified":
+    case "surrendered":
+    case "awarded":
+    case "restarted":
+      return outcomeNotYetImplemented(outcome.type);
+    case "redealt": {
+      const tokens = { A: summary.tokens.A, B: summary.tokens.B };
+      const matchLog =
+        state.config.gameType === "28"
+          ? [...state.matchLog, summary]
+          : state.matchLog;
+
+      return {
+        config: state.config,
+        tokens,
+        dealer: summary.dealer,
+        matchLog,
+        pastSessions: state.pastSessions,
+        phase: { type: "awaitingDeal", reason: "redeal" },
+      };
+    }
+    default:
+      return assertNever(outcome, "evolveMatchEnded");
+  }
+}
+
 export function evolve(state: EngineState, event: EngineEvent): EngineState {
   switch (event.type) {
     case "sessionStarted":
       return evolveSessionStarted(state, event);
+    case "dealt":
+      return evolveDealt(state, event);
+    case "redealt":
+      return evolveRedealt(state, event);
+    case "auctionStarted":
+      return evolveAuctionStarted(state, event);
+    case "matchEnded":
+      return evolveMatchEnded(state, event);
     case "sessionRestarted":
     case "sessionEnded":
     case "nextMatchStarted":
-    case "dealt":
-    case "redealt":
-    case "auctionStarted":
     case "bidMade":
     case "passed":
     case "doubled":
@@ -176,7 +247,6 @@ export function evolve(state: EngineState, event: EngineEvent): EngineState {
     case "surrenderVoted":
     case "surrenderFailed":
     case "surrendered":
-    case "matchEnded":
       return missingEvolver(state, event);
     default:
       return assertNever(event, "evolve");

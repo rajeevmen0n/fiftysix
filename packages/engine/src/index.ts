@@ -25,6 +25,7 @@ export {
   SUITS,
 } from "./cards.js";
 export { validateConfig } from "./config.js";
+export { dealCards, validateDeck } from "./deal.js";
 export { act, decide, evolve, newSession } from "./engine.js";
 export type {
   AuctionEndedEvent,
@@ -72,6 +73,7 @@ export {
   type EngineInvariantCode,
   EngineInvariantError,
 } from "./invariants.js";
+export { redealReason } from "./redeal.js";
 export type {
   ActionResult,
   Decision,

@@ -8,44 +8,55 @@ implementation plans.
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
-| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E002 | Await user approval before E003 |
+| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E003 | Await user approval before E004 |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-E002 — Establish actions, events, state, and the transition kernel — implementation commit
-`feat(engine): add transition kernel`.
+E003 — Implement dealing and automatic redeals — implementation commit
+`feat(engine): deal cards and detect redeals`.
 
-- Added JSON-safe state, action, event, rejection, outcome and redeal-reason unions
-  (`state.ts`, `actions.ts`, `events.ts`, `result.ts`), `newSession`, the `decide`/`evolve`/`act`
-  kernel (`engine.ts`) and `assertEngineInvariants`. `decide` checks known type → source →
-  seat range → phase table, then `routeAction`. Later units plug in by replacing the placeholder
-  in their `case` of the exhaustive `routeAction`/`evolve` switches (actions currently return
-  `actionNotAllowed`; unimplemented events throw). `RedealReason`, `ScoredOutcome`,
-  `IllegalPlayKind` live in `state.ts`; E003/E006 should reuse them rather than redefine.
-- Test runner added: `pnpm test` → `node:test` via root `tsx`; test files are excluded from the
-  engine tsconfig and typechecked by `tsconfig.test.json` (Node types there only). 14 tests cover
-  session creation (including non-object config), source/seat/phase rejections with full details,
-  immutability, JSON round-trip, replay equivalence, determinism, and each invariant code.
-- Independent review found vacuous source-mismatch tests and a tautological team invariant. Fix
-  round 1 asserted full rejection details (verified failing with the source check bypassed),
-  removed the tautology, added match/session token invariants and non-object config rejection.
-- Primary verification on 2026-09-14: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test`,
-  `git diff --check`, and the dependency/import audit passed. Temporarily unhandled action, event
-  and phase variants failed `tsc` in all five exhaustive sites.
-- Representation choices (spec silent): `dealt` carries `undealt` for replay (E009 must redact);
-  deal stages `full`/`first`/`second`; `revealedInRound`/`lastFailedRound` are zero-based round
-  indexes; summaries use `tokensMoved: {payer, amount} | null`; the contract carries bid `style`.
-- Settle before E005: design §8.3 emits `auctionEnded(contract)` after each 28 auction, but after
-  the first auction no card is placed yet, so `ContractTrump` (`hidden` requires a suit) cannot
-  represent a not-yet-chosen trump; decide whether to add a pending trump variant or emit the 28
-  contract after `cardPlaced`, and whether a contract exists during `placingCard`/second auction.
-  For E007, `roundWinner(round, contract)` implies `trumpRevealed` rewrites `hidden(suit)` to
-  `suit`.
-- Deferred minors: exported card lookup constants are not frozen at runtime (E001); missing-card
-  completeness invariant arrives with dealing in E003; unused `Disqualification` type.
-- Next unit: E003, Implement dealing and automatic redeals, after user approval.
+- Added `deal.ts` (`validateDeck`, `dealCards`, `decideDeal`, `evolveDealt`,
+  `evolveAuctionStarted`) and `redeal.ts` (`redealReason`, `evolveRedealt`); wired `deal` in
+  `routeAction` and `dealt`/`redealt`/`auctionStarted`/`matchEnded` in `evolve` (`engine.ts`).
+  `validateDeck` checks exact multiset equality against `buildDeck(config)`; rejection `details`
+  carry only counts/reason strings, never card contents. `dealCards` deals counter-clockwise from
+  `dealer + 1`. `redealReason` checks team-without-Jack (team order) before any low hand (seat
+  order), reusing `RedealReason` from `state.ts`.
+- 56: full deal → redeal check → `redealt`+`matchEnded` (not appended to `matchLog`, per design
+  §10.3) or `auctionStarted(56, dealer+1, 28)`. 28: first-stage deal only (4/seat to hands, 4/seat
+  to `undealt`) → `auctionStarted(28-first, dealer+1, 14)`, no redeal check yet. The 28 second
+  deal/redeal trigger (design §8.4) is explicitly out of scope — it depends on the auction and
+  hidden-trump machinery E004/E005 have not built yet.
+- `evolveMatchEnded` (new, in `engine.ts`) only implements the `redealt` outcome (appended to
+  `matchLog` for 28, not for 56, per design §10.3); every other `MatchOutcome` throws via
+  `outcomeNotYetImplemented` rather than being half-built ahead of the scoring/surrender/`endMatch`
+  units that will actually produce them and must also wire the paired `sessionEnded` event (design
+  §10.4) — an independent review flagged the first draft's premature `matchOver`/`sessionOver`
+  handling as both non-compliant (56/28 `matchLog` rule was backwards for 28) and a latent
+  collision with the unimplemented `sessionEnded` evolver.
+- `evolveAuctionStarted` throws (design §13.1 "throw instead of recover") on an unexpected phase
+  rather than silently returning state unchanged — the review's first pass had a silent no-op
+  here. `evolveDealt` throws for `stage: "second"` rather than silently rebuilding (and thereby
+  discarding) live match state; the actual second-deal merge is a later unit's job.
+- `evolveDealt` parks a freshly dealt match under phase `auction` with `auction: null` as a
+  transient shape that only exists between the `dealt` and `auctionStarted`/`redealt` events of
+  one `act()` call; this is documented in-line since it technically fails `checkMatch`'s
+  `phaseMatchMismatch` check if inspected in isolation (confirmed by direct test) —
+  `assertEngineInvariants` is only guaranteed to hold after a full action, never mid-action.
+- `invariants.ts` gained `missingCardLocation`: `checkCardLocations` now checks completeness
+  (every configured card appears somewhere), not just absence of duplicates/unknowns.
+- 37 tests total (23 new): every dealable player/deck-size combination, first/last-seat dealing,
+  every invalid-deck shape, each redeal reason and their precedence, same-dealer redeal, 28
+  first-deal deferral, the 56/28 `matchLog` split, and each of the three throw-instead-of-recover
+  cases above.
+- Primary verification on 2026-09-14: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test`
+  (37/37 passing), `git diff --check`, and a zero-dependency manifest check all passed.
+- Deferred/settle-later items carried over from E002 remain open (see prior entries in git
+  history for §8.3 pending-trump representation and E001's unfrozen lookup constants); the 28
+  second-deal merge into live match state is now also an explicit E004/E005-era decision point.
+- Next unit: E004, Implement the shared auction and complete 56 contracts, after user approval.
 
 ## Implementation readiness
 

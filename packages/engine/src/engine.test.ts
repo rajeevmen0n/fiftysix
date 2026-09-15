@@ -1,12 +1,24 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { EngineAction } from "./actions.js";
-import { buildDeck } from "./cards.js";
+import { buildDeck, cardPoints } from "./cards.js";
+import {
+  dealCards,
+  evolveAuctionStarted,
+  evolveDealt,
+  validateDeck,
+} from "./deal.js";
 import { act, decide, evolve, newSession } from "./engine.js";
-import type { EngineEvent } from "./events.js";
+import type { DealtEvent, EngineEvent, MatchEndedEvent } from "./events.js";
 import { assertEngineInvariants, EngineInvariantError } from "./invariants.js";
-import type { EngineState, MatchState, MatchSummary } from "./state.js";
-import type { EngineConfig } from "./types.js";
+import { redealReason } from "./redeal.js";
+import type {
+  EngineState,
+  MatchOutcome,
+  MatchState,
+  MatchSummary,
+} from "./state.js";
+import type { Card, EngineConfig } from "./types.js";
 
 function config56(overrides: Partial<EngineConfig> = {}): EngineConfig {
   return {
@@ -457,6 +469,16 @@ describe("assertEngineInvariants", () => {
         ...base,
         phase: {
           type: "auction",
+          match: { ...match, hands: [first.slice(1), ...rest] },
+        },
+      }),
+      "missingCardLocation",
+    );
+    assert.equal(
+      invariantCode({
+        ...base,
+        phase: {
+          type: "auction",
           match: {
             ...match,
             auction: match.auction && { ...match.auction, turn: 4 },
@@ -573,5 +595,529 @@ describe("assertEngineInvariants", () => {
       ),
       "invalidTokens",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E003: dealing and automatic redeals
+
+/** Every deck size/player-count combination the rules allow (rules §3, §10.1). */
+function dealableConfigs(): EngineConfig[] {
+  return [
+    config56(),
+    config56({ includeEightsAndSevens: true }),
+    config56({ playerCount: 6 }),
+    config56({ playerCount: 8 }),
+    config56({ playerCount: 8, includeEightsAndSevens: true }),
+    config28(),
+  ];
+}
+
+describe("dealCards", () => {
+  it("deals one card at a time counter-clockwise from the dealer's right", () => {
+    for (const config of dealableConfigs()) {
+      const deck = buildDeck(config);
+      const { playerCount } = config;
+      for (const dealer of [0, playerCount - 1, Math.floor(playerCount / 2)]) {
+        const hands = dealCards(deck, dealer, playerCount);
+
+        assert.equal(hands.length, playerCount);
+        for (const hand of hands) {
+          assert.equal(hand.length, deck.length / playerCount);
+        }
+        assert.equal(
+          hands.reduce((total, hand) => total + hand.length, 0),
+          deck.length,
+        );
+
+        const firstSeat = (dealer + 1) % playerCount;
+        const lastSeat = (dealer + deck.length) % playerCount;
+        const firstHand = hands[firstSeat];
+        const lastHand = hands[lastSeat];
+        assert.ok(firstHand !== undefined && lastHand !== undefined);
+        assert.deepEqual(firstHand[0], deck[0]);
+        assert.deepEqual(lastHand[lastHand.length - 1], deck[deck.length - 1]);
+
+        // Clones, not the caller's own card objects.
+        assert.notEqual(firstHand[0], deck[0]);
+      }
+    }
+  });
+
+  it("does not mutate the input deck", () => {
+    const config = config56();
+    const deck = deepFreeze(buildDeck(config));
+    dealCards(deck, 0, config.playerCount);
+    assert.deepEqual(deck, buildDeck(config));
+  });
+});
+
+describe("validateDeck", () => {
+  it("accepts an exact multiset match for every dealable config", () => {
+    for (const config of dealableConfigs()) {
+      assert.equal(validateDeck(config, buildDeck(config)), null);
+    }
+  });
+
+  it("rejects a deck missing a card", () => {
+    const config = config56();
+    const deck = buildDeck(config).slice(1);
+    const result = validateDeck(config, deck);
+    assert.equal(result?.code, "invalidDeck");
+  });
+
+  it("rejects a deck with an extra card", () => {
+    const config = config56();
+    const base = buildDeck(config);
+    const extra = [...base, base[0] as Card];
+    const result = validateDeck(config, extra);
+    assert.equal(result?.code, "invalidDeck");
+  });
+
+  it("rejects a deck with a duplicate replacing a needed card", () => {
+    const config = config56();
+    const base = buildDeck(config);
+    const duplicated = [...base.slice(0, -1), base[0] as Card];
+    const result = validateDeck(config, duplicated);
+    assert.equal(result?.code, "invalidDeck");
+  });
+
+  it("rejects a deck with a foreign card", () => {
+    const config = config56();
+    const base = buildDeck(config);
+    const foreign: Card = {
+      suit: "spades",
+      rank: "6" as Card["rank"],
+      copy: 1,
+    };
+    const withForeign = [...base.slice(0, -1), foreign];
+    const result = validateDeck(config, withForeign);
+    assert.equal(result?.code, "invalidDeck");
+  });
+
+  it("rejects a deck with a wrong copy number", () => {
+    const config = config56();
+    const base = buildDeck(config);
+    const index = base.findIndex((card) => card.copy === 1);
+    assert.ok(index >= 0);
+    const wrongCopy = base.map((card, i) =>
+      i === index ? { ...card, copy: 2 as const } : card,
+    );
+    const result = validateDeck(config, wrongCopy);
+    assert.equal(result?.code, "invalidDeck");
+  });
+
+  it("does not include deck contents in rejection details", () => {
+    const config = config56();
+    const result = validateDeck(config, buildDeck(config).slice(1));
+    assert.equal(result?.code, "invalidDeck");
+    for (const value of Object.values(result?.details ?? {})) {
+      assert.ok(
+        typeof value === "number" ||
+          typeof value === "boolean" ||
+          typeof value === "string",
+      );
+    }
+  });
+});
+
+describe("redealReason", () => {
+  const card = (
+    suit: Card["suit"],
+    rank: Card["rank"],
+    copy: 1 | 2 = 1,
+  ): Card => ({ suit, rank, copy });
+
+  it("detects a team holding no Jack across its own seats", () => {
+    const holdings: Card[][] = [
+      [card("spades", "J")],
+      [card("hearts", "Q"), card("hearts", "K")],
+      [card("diamonds", "J")],
+      [card("clubs", "Q"), card("clubs", "K")],
+    ];
+    assert.deepEqual(redealReason(holdings, 2), {
+      type: "teamWithoutJack",
+      team: "B",
+    });
+  });
+
+  it("detects a low hand when every team holds a Jack", () => {
+    const holdings: Card[][] = [
+      [card("spades", "J")],
+      [card("hearts", "J")],
+      [card("spades", "A")],
+      [card("hearts", "10")],
+    ];
+    assert.deepEqual(redealReason(holdings, 0), null);
+
+    const lowHoldings: Card[][] = [
+      [card("spades", "J")],
+      [card("hearts", "J")],
+      [card("spades", "A")],
+      [card("hearts", "K"), card("hearts", "Q")],
+    ];
+    assert.deepEqual(redealReason(lowHoldings, 0), {
+      type: "lowHand",
+      seat: 3,
+      points: 0,
+    });
+  });
+
+  it("checks team-without-Jack before any low hand", () => {
+    const holdings: Card[][] = [
+      [card("spades", "J")],
+      [card("hearts", "K"), card("hearts", "Q")],
+      [card("diamonds", "J")],
+      [card("clubs", "K"), card("clubs", "Q")],
+    ];
+    // Every seat is at or below the threshold, so a low hand exists too.
+    assert.deepEqual(redealReason(holdings, 7), {
+      type: "teamWithoutJack",
+      team: "B",
+    });
+  });
+
+  it("picks the lowest-indexed seat when several qualify", () => {
+    const holdings: Card[][] = [
+      [card("spades", "K"), card("spades", "Q")],
+      [card("hearts", "K"), card("hearts", "Q")],
+      [card("diamonds", "J"), card("diamonds", "9")],
+      [card("clubs", "J"), card("clubs", "9")],
+    ];
+    assert.deepEqual(redealReason(holdings, 2), {
+      type: "lowHand",
+      seat: 0,
+      points: 0,
+    });
+  });
+
+  it("returns null when no team lacks a Jack and no hand is low", () => {
+    const holdings: Card[][] = [
+      [card("spades", "J")],
+      [card("hearts", "J")],
+      [card("spades", "A")],
+      [card("hearts", "10")],
+    ];
+    assert.equal(redealReason(holdings, 0), null);
+  });
+});
+
+describe("deal action", () => {
+  const system = { type: "system" } as const;
+
+  /**
+   * Reorders a 4-player deck so every Jack lands on the two seats that are
+   * the dealer's right and the seat two to their right (both team B when the
+   * dealer is seat 0), leaving team A with none — a deterministic
+   * `teamWithoutJack` fixture without relying on any particular shuffle.
+   */
+  function noJackForTeamADeck(config: EngineConfig): Card[] {
+    const deck = buildDeck(config);
+    const jacks = deck.filter((c) => c.rank === "J");
+    const rest = deck.filter((c) => c.rank !== "J");
+    const result: Card[] = [];
+    let jackIndex = 0;
+    let restIndex = 0;
+    for (let k = 0; k < deck.length; k += 1) {
+      const bSlot = k % 4 === 0 || k % 4 === 2;
+      const next =
+        bSlot && jackIndex < jacks.length
+          ? jacks[jackIndex++]
+          : rest[restIndex++];
+      assert.ok(next !== undefined);
+      result.push(next);
+    }
+    return result;
+  }
+
+  it("56: deals the full deck and starts the auction when there is no redeal", () => {
+    const config = config56();
+    const { state } = started(config, 0);
+    const deck = buildDeck(config);
+    const hands = dealCards(deck, 0, config.playerCount);
+    // Sanity: this natural deck order does not itself trigger a redeal.
+    assert.equal(redealReason(hands, config.redealThreshold), null);
+
+    const action: EngineAction = { type: "deal", source: system, deck };
+    const result = act(state, action);
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      throw new Error("unreachable");
+    }
+
+    assert.deepEqual(result.events, [
+      { type: "dealt", stage: "full", hands, undealt: null },
+      { type: "auctionStarted", stage: "56", firstTurn: 1, minBid: 28 },
+    ]);
+    assert.equal(result.state.phase.type, "auction");
+    if (result.state.phase.type !== "auction") {
+      throw new Error("unreachable");
+    }
+    assert.deepEqual(result.state.phase.match.hands, hands);
+    assert.equal(result.state.phase.match.undealt, null);
+    assert.deepEqual(result.state.phase.match.auction, {
+      stage: "56",
+      calls: [],
+      turn: 1,
+      highBid: null,
+      doubledBy: null,
+      redoubled: false,
+      consecutivePasses: 0,
+      carriedBid: null,
+    });
+    assertEngineInvariants(result.state);
+
+    const replayed = result.events.reduce<EngineState>(
+      (current, event) => evolve(current, event),
+      state,
+    );
+    assert.deepEqual(replayed, result.state);
+  });
+
+  it("56: redeals on a team without a Jack, keeping the same dealer and tokens, without logging it", () => {
+    const config = config56({ redealThreshold: 13 });
+    const { state } = started(config, 0);
+    const deck = noJackForTeamADeck(config);
+    const hands = dealCards(deck, 0, config.playerCount);
+    const handPoints = hands.map((hand) =>
+      hand.reduce((total, c) => total + cardPoints(c), 0),
+    );
+    // Sanity: a low hand also exists, to prove team-without-Jack still wins.
+    const threshold = Math.max(...handPoints);
+    assert.deepEqual(redealReason(hands, threshold), {
+      type: "teamWithoutJack",
+      team: "A",
+    });
+
+    const action: EngineAction = { type: "deal", source: system, deck };
+    const result = act(state, action);
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      throw new Error("unreachable");
+    }
+
+    const reason = { type: "teamWithoutJack" as const, team: "A" as const };
+    const summary: MatchSummary = {
+      dealer: 0,
+      contract: null,
+      points: { A: 0, B: 0 },
+      tokensMoved: null,
+      tokens: { A: config.startingTokens, B: config.startingTokens },
+      outcome: { type: "redealt", reason },
+    };
+    assert.deepEqual(result.events, [
+      { type: "dealt", stage: "full", hands, undealt: null },
+      { type: "redealt", reason },
+      { type: "matchEnded", summary },
+    ]);
+    assert.deepEqual(result.state, {
+      config,
+      tokens: { A: config.startingTokens, B: config.startingTokens },
+      dealer: 0,
+      matchLog: [],
+      pastSessions: [],
+      phase: { type: "awaitingDeal", reason: "redeal" },
+    });
+    assertEngineInvariants(result.state);
+
+    const replayed = result.events.reduce<EngineState>(
+      (current, event) => evolve(current, event),
+      state,
+    );
+    assert.deepEqual(replayed, result.state);
+  });
+
+  it("56: redeals on a low hand when every team holds a Jack", () => {
+    const config = config56({ playerCount: 6, redealThreshold: 8 });
+    const { state } = started(config, 1);
+    const deck = buildDeck(config);
+    const hands = dealCards(deck, 1, config.playerCount);
+    const reason = redealReason(hands, config.redealThreshold);
+    assert.equal(reason?.type, "lowHand");
+
+    const action: EngineAction = { type: "deal", source: system, deck };
+    const result = act(state, action);
+    assert.equal(result.ok, true);
+    if (!result.ok || result.state.phase.type !== "awaitingDeal") {
+      throw new Error("unreachable");
+    }
+    assert.equal(result.state.phase.reason, "redeal");
+    assert.equal(result.state.dealer, 1);
+    assert.deepEqual(result.state.tokens, state.tokens);
+    assert.deepEqual(result.state.matchLog, []);
+    assertEngineInvariants(result.state);
+  });
+
+  it("rejects an invalid deck without changing state", () => {
+    const config = config56();
+    const { state } = started(config, 0);
+    const badDeck = buildDeck(config).slice(1);
+    const action: EngineAction = {
+      type: "deal",
+      source: system,
+      deck: badDeck,
+    };
+
+    assert.deepEqual(decide(state, action), {
+      ok: false,
+      code: "invalidDeck",
+      details: {
+        expectedCount: buildDeck(config).length,
+        actualCount: badDeck.length,
+      },
+    });
+    const result = act(state, action);
+    assert.equal(result.ok, false);
+  });
+
+  it("28: deals only the first four cards per seat and does not check for a redeal", () => {
+    const config = config28();
+    const { state } = started(config, 0);
+    const deck = buildDeck(config);
+    const firstHands = dealCards(deck.slice(0, 16), 0, config.playerCount);
+    const undealt = dealCards(deck.slice(16), 0, config.playerCount);
+
+    // Sanity: the first four cards alone would already call for a redeal
+    // (team A holds no Jack in them), proving the check really is skipped.
+    assert.deepEqual(redealReason(firstHands, config.redealThreshold), {
+      type: "teamWithoutJack",
+      team: "A",
+    });
+
+    const action: EngineAction = { type: "deal", source: system, deck };
+    const result = act(state, action);
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      throw new Error("unreachable");
+    }
+
+    assert.deepEqual(result.events, [
+      { type: "dealt", stage: "first", hands: firstHands, undealt },
+      { type: "auctionStarted", stage: "28-first", firstTurn: 1, minBid: 14 },
+    ]);
+    assert.equal(result.state.phase.type, "auction");
+    if (result.state.phase.type !== "auction") {
+      throw new Error("unreachable");
+    }
+    assert.deepEqual(result.state.phase.match.hands, firstHands);
+    assert.deepEqual(result.state.phase.match.undealt, undealt);
+    assert.equal(result.state.phase.match.auction?.stage, "28-first");
+    assert.equal(result.state.phase.match.auction?.turn, 1);
+    assertEngineInvariants(result.state);
+
+    const replayed = result.events.reduce<EngineState>(
+      (current, event) => evolve(current, event),
+      state,
+    );
+    assert.deepEqual(replayed, result.state);
+  });
+});
+
+describe("evolveMatchEnded", () => {
+  function redealSummary(config: EngineConfig, dealer: number): MatchSummary {
+    return {
+      dealer,
+      contract: null,
+      points: { A: 0, B: 0 },
+      tokensMoved: null,
+      tokens: { A: config.startingTokens, B: config.startingTokens },
+      outcome: {
+        type: "redealt",
+        reason: { type: "teamWithoutJack", team: "A" },
+      },
+    };
+  }
+
+  it("design §10.3: appends a 28 automatic redeal to matchLog but not a 56 one", () => {
+    const config56Value = config56();
+    const { state: state56 } = started(config56Value, 0);
+    const summary56 = redealSummary(config56Value, 0);
+    const result56 = evolve(state56, {
+      type: "matchEnded",
+      summary: summary56,
+    });
+    assert.deepEqual(result56, {
+      ...state56,
+      matchLog: [],
+      phase: { type: "awaitingDeal", reason: "redeal" },
+    });
+    assertEngineInvariants(result56);
+
+    const config28Value = config28();
+    const { state: state28 } = started(config28Value, 0);
+    const summary28 = redealSummary(config28Value, 0);
+    const result28 = evolve(state28, {
+      type: "matchEnded",
+      summary: summary28,
+    });
+    assert.deepEqual(result28, {
+      ...state28,
+      matchLog: [summary28],
+      phase: { type: "awaitingDeal", reason: "redeal" },
+    });
+    assertEngineInvariants(result28);
+  });
+
+  it("throws for every match outcome not yet implemented by any unit", () => {
+    const config = config56();
+    const { state } = started(config, 0);
+    const base = {
+      dealer: 0 as const,
+      contract: null,
+      points: { A: 0, B: 0 },
+      tokensMoved: null,
+      tokens: { A: config.startingTokens, B: config.startingTokens },
+    };
+    const outcomes: MatchOutcome[] = [
+      { type: "made" },
+      { type: "failed" },
+      { type: "disqualified", seat: 0, kind: "didNotFollowSuit" },
+      { type: "surrendered", team: "A" },
+      { type: "awarded", team: "A" },
+      { type: "restarted" },
+    ];
+
+    for (const outcome of outcomes) {
+      const event: MatchEndedEvent = {
+        type: "matchEnded",
+        summary: { ...base, outcome },
+      };
+      assert.throws(() => evolve(state, event));
+    }
+  });
+});
+
+describe("evolveAuctionStarted", () => {
+  it("throws instead of silently returning state unchanged on a phase mismatch (design §13.1)", () => {
+    const config = config56();
+    const { state } = started(config, 0);
+    assert.equal(state.phase.type, "awaitingDeal");
+
+    assert.throws(() =>
+      evolveAuctionStarted(state, {
+        type: "auctionStarted",
+        stage: "56",
+        firstTurn: 1,
+        minBid: 28,
+      }),
+    );
+  });
+});
+
+describe("evolveDealt", () => {
+  it("throws instead of silently rebuilding match state for a 28 second deal", () => {
+    const config = config28();
+    const { state } = started(config, 0);
+    const deck = buildDeck(config);
+    const hands = dealCards(deck.slice(16), 0, config.playerCount);
+
+    const event: DealtEvent = {
+      type: "dealt",
+      stage: "second",
+      hands,
+      undealt: null,
+    };
+
+    assert.throws(() => evolveDealt(state, event));
   });
 });

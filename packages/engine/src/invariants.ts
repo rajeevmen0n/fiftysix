@@ -20,6 +20,7 @@ export type EngineInvariantCode =
   | "invalidSeatArrays"
   | "unknownCard"
   | "duplicateCardLocation"
+  | "missingCardLocation"
   | "invalidTurn"
   | "invalidPoints"
   | "summaryLeaksHiddenTrump";
@@ -229,6 +230,12 @@ function checkCardLocations(state: EngineState, match: MatchState): void {
   for (const play of match.currentRound?.plays ?? []) {
     locate(play.card);
   }
+
+  // Design §7.1/E003: once a match exists every configured card is in
+  // exactly one place — a hand, `undealt`, a round, or face-down storage.
+  // The loops above already reject duplicates and foreign cards; this closes
+  // the gap by rejecting cards that are missing from all of them.
+  check(seen.size === known.size, "missingCardLocation");
 }
 
 /**
