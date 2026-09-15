@@ -28,3 +28,15 @@ export function teamOf(seat: Seat): Team {
 
   return seat % 2 === 0 ? "A" : "B";
 }
+
+export function isSeatInRange(
+  seat: unknown,
+  playerCount: number,
+): seat is Seat {
+  return (
+    typeof seat === "number" &&
+    Number.isInteger(seat) &&
+    seat >= 0 &&
+    seat < playerCount
+  );
+}

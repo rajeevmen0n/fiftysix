@@ -8,30 +8,44 @@ implementation plans.
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
-| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E001 | Await user approval before E002 |
+| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E002 | Await user approval before E003 |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
 
-E001 — Define cards, seats, configuration, and stakes — implementation commits
-`feat(engine): add cards configuration and stakes` and
-`fix(engine): reject unsupported team seats`.
+E002 — Establish actions, events, state, and the transition kernel — implementation commit
+`feat(engine): add transition kernel`.
 
-- Added the dependency-free engine's card, config, seat, and stake foundations. Deterministic
-  `tsx` checks covered all six valid deck/config variants, exact point totals and identities,
-  23 invalid configs, seat order and bounds, stake lookup and multipliers, affordability, capped
-  token transfer, and input immutability.
-- Independent review found `teamOf` accepted universally unsupported seat indices. Fix round 1
-  added the upper bound, its focused boundary harness passed, and scoped re-review found no new
-  breakage.
-- Primary verification on 2026-09-14: deterministic harnesses, `pnpm typecheck`, `pnpm lint`,
-  `pnpm build`, `git diff --check`, and the dependency/import audit all passed. The engine manifest
-  has no dependencies and its source imports remain package-local.
-- Deferred minor for the whole-engine review: exported card lookup constants are TypeScript
-  readonly but are not frozen at runtime.
-- Next unit: E002, Establish actions, events, state, and the transition kernel, after user
-  approval.
+- Added JSON-safe state, action, event, rejection, outcome and redeal-reason unions
+  (`state.ts`, `actions.ts`, `events.ts`, `result.ts`), `newSession`, the `decide`/`evolve`/`act`
+  kernel (`engine.ts`) and `assertEngineInvariants`. `decide` checks known type → source →
+  seat range → phase table, then `routeAction`. Later units plug in by replacing the placeholder
+  in their `case` of the exhaustive `routeAction`/`evolve` switches (actions currently return
+  `actionNotAllowed`; unimplemented events throw). `RedealReason`, `ScoredOutcome`,
+  `IllegalPlayKind` live in `state.ts`; E003/E006 should reuse them rather than redefine.
+- Test runner added: `pnpm test` → `node:test` via root `tsx`; test files are excluded from the
+  engine tsconfig and typechecked by `tsconfig.test.json` (Node types there only). 14 tests cover
+  session creation (including non-object config), source/seat/phase rejections with full details,
+  immutability, JSON round-trip, replay equivalence, determinism, and each invariant code.
+- Independent review found vacuous source-mismatch tests and a tautological team invariant. Fix
+  round 1 asserted full rejection details (verified failing with the source check bypassed),
+  removed the tautology, added match/session token invariants and non-object config rejection.
+- Primary verification on 2026-09-14: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test`,
+  `git diff --check`, and the dependency/import audit passed. Temporarily unhandled action, event
+  and phase variants failed `tsc` in all five exhaustive sites.
+- Representation choices (spec silent): `dealt` carries `undealt` for replay (E009 must redact);
+  deal stages `full`/`first`/`second`; `revealedInRound`/`lastFailedRound` are zero-based round
+  indexes; summaries use `tokensMoved: {payer, amount} | null`; the contract carries bid `style`.
+- Settle before E005: design §8.3 emits `auctionEnded(contract)` after each 28 auction, but after
+  the first auction no card is placed yet, so `ContractTrump` (`hidden` requires a suit) cannot
+  represent a not-yet-chosen trump; decide whether to add a pending trump variant or emit the 28
+  contract after `cardPlaced`, and whether a contract exists during `placingCard`/second auction.
+  For E007, `roundWinner(round, contract)` implies `trumpRevealed` rewrites `hidden(suit)` to
+  `suit`.
+- Deferred minors: exported card lookup constants are not frozen at runtime (E001); missing-card
+  completeness invariant arrives with dealing in E003; unused `Disqualification` type.
+- Next unit: E003, Implement dealing and automatic redeals, after user approval.
 
 ## Implementation readiness
 

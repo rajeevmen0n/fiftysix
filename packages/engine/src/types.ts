@@ -44,3 +44,6 @@ export interface TokenTransfer {
   balances: TokenBalances;
   amount: number;
 }
+
+export type BidSuit = Suit | "noTrump";
+export type BidStyle = "numberFirst" | "suitFirst";

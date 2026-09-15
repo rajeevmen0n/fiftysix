@@ -13,6 +13,7 @@
     "build": "pnpm --filter @fiftysix/server build && pnpm --filter @fiftysix/web build",
     "start": "node dist/server/server.js",
     "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
     "lint": "biome check .",
     "format": "biome format --write ."
   },

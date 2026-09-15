@@ -161,7 +161,7 @@ export function stakeFor(config: EngineConfig, amount: number): StakeTier;
 
 ---
 
-### [ ] E002: Establish actions, events, state, and the transition kernel
+### [x] E002: Establish actions, events, state, and the transition kernel
 
 **Suggested implementer:** `gpt-5.6-sol`, high effort
 
@@ -216,27 +216,27 @@ export function evolve(state: EngineState, event: EngineEvent): EngineState;
 export function act(state: EngineState, action: EngineAction): ActionResult;
 ```
 
-- [ ] Define JSON-safe session, phase, match, auction, contract, hand, round, surrender,
+- [x] Define JSON-safe session, phase, match, auction, contract, hand, round, surrender,
   match-summary, and past-session types matching design §6. Match-summary contracts are nullable
   for pre-contract restarts/redeals and use a distinct summary-contract type whose hidden-trump
   variant contains no suit/card. Use discriminated unions for every phase and outcome; use arrays
   indexed by validated seat and explicit `{A, B}` token/point records.
-- [ ] Define the complete action, event, rejection, redeal-reason, disqualification, and outcome
+- [x] Define the complete action, event, rejection, redeal-reason, disqualification, and outcome
   unions from design §§7–11. Rejection details may contain safe expected ranges/seats/kinds but
   never hidden cards or full state.
-- [ ] Implement `newSession` as config/first-dealer validation followed by the single
+- [x] Implement `newSession` as config/first-dealer validation followed by the single
   `sessionStarted` event, producing equal starting token balances and `awaitingDeal(firstDeal)`.
-- [ ] Implement immutable `act = decide + ordered evolve`. Route by action/event discriminator
+- [x] Implement immutable `act = decide + ordered evolve`. Route by action/event discriminator
   through registered pure module functions; unsupported phase/action combinations return
   `actionNotAllowed`. Ensure input references are never mutated.
-- [ ] Add `assertEngineInvariants` for valid dealer/seat ranges, alternating teams, nonnegative
+- [x] Add `assertEngineInvariants` for valid dealer/seat ranges, alternating teams, nonnegative
   tokens, phase/match consistency, unique card locations, and valid turn ownership. Extend it in
   later units as new state becomes reachable; failures identify invariant code without dumping
   private state.
-- [ ] Add and run focused automated tests for valid/invalid session creation, source/action
+- [x] Add and run focused automated tests for valid/invalid session creation, source/action
   mismatches, immutable inputs, JSON round-trip, initial event evolution, and deterministic
   duplicate calls.
-- [ ] Run typecheck, lint, build, and `git diff --check`; require success. Confirm exhaustive
+- [x] Run typecheck, lint, build, and `git diff --check`; require success. Confirm exhaustive
   switches fail compilation when a temporary variant is unhandled, update plan/progress, and
   commit `feat(engine): add transition kernel`.
 

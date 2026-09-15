@@ -89,6 +89,8 @@ Run inside the dev shell: `nix develop -c pnpm <script>`.
 - `pnpm start`: serves the built browser app, `/healthz`, and `/ws` from one process; client routes
   receive the SPA fallback, while `/debug` remains a 404 until its planned implementation
 - `pnpm typecheck`, `pnpm lint`, `pnpm format`
+- `pnpm test`: runs package tests (`node:test` via `tsx --test`; engine tests are `src/**/*.test.ts`
+  with Node types only in `tsconfig.test.json`, so production engine source stays Node-free)
 - `nix build`, `nix run`, `nix flake check`: build, run, and verify the packaged application
 
 The server creates the configured SQLite database and runs migrations at startup. For local smoke
