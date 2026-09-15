@@ -23,7 +23,8 @@ export type EngineInvariantCode =
   | "missingCardLocation"
   | "invalidTurn"
   | "invalidPoints"
-  | "summaryLeaksHiddenTrump";
+  | "summaryLeaksHiddenTrump"
+  | "invalidAuctionState";
 
 /** Thrown for engine bugs. The message names only the invariant code. */
 export class EngineInvariantError extends Error {
@@ -142,7 +143,60 @@ function checkMatch(
     for (const call of auction.calls) {
       checkSeat(call.seat, playerCount);
     }
-    check(isNonNegativeWholeNumber(auction.consecutivePasses), "invalidTurn");
+    // design §8.3: reaching the ending threshold ends the active auction
+    // within the same action. The terminal count remains in the preserved
+    // auction data after the phase advances to placingCard or play.
+    //
+    // A 28 second auction gives all N seats its initial circuit while only
+    // the carried bid/double stands. A new bid is necessarily higher than
+    // the carried amount, and a new double changes `doubledBy`, so
+    // `carriedBidStillStanding` reads the standing bid off `highBid` here.
+    // E005 decides how it represents a standing carried bid/double in
+    // `highBid` and adjusts these checks (including the `doubledBy !==
+    // null => highBid !== null` one below) to match.
+    const carriedBidStillStanding =
+      auction.stage === "28-second" &&
+      auction.carriedBid !== null &&
+      (auction.highBid === null ||
+        (auction.highBid.seat === auction.carriedBid.bid.seat &&
+          auction.highBid.amount === auction.carriedBid.bid.amount)) &&
+      auction.doubledBy === auction.carriedBid.doubledBy;
+    const hasStandingNonForcedBid =
+      (auction.highBid !== null && !auction.highBid.forced) ||
+      (auction.carriedBid !== null && !auction.carriedBid.bid.forced);
+    const passLimit = carriedBidStillStanding
+      ? playerCount
+      : hasStandingNonForcedBid
+        ? playerCount - 1
+        : playerCount;
+    check(
+      isNonNegativeWholeNumber(auction.consecutivePasses) &&
+        (phase === "auction"
+          ? auction.consecutivePasses < passLimit
+          : auction.consecutivePasses <= passLimit),
+      "invalidTurn",
+    );
+
+    // design §8.2/§8.4: a double can only stand against the other team's
+    // bid, a redouble implies an active double, and the forced bid (exempt
+    // from doubling entirely) can never carry either.
+    if (auction.doubledBy !== null) {
+      check(auction.highBid !== null, "invalidAuctionState");
+      check(
+        auction.highBid === null ||
+          teamOf(auction.doubledBy) !== teamOf(auction.highBid.seat),
+        "invalidAuctionState",
+      );
+    }
+    check(
+      !auction.redoubled || auction.doubledBy !== null,
+      "invalidAuctionState",
+    );
+    check(
+      !(auction.highBid?.forced ?? false) ||
+        (auction.doubledBy === null && !auction.redoubled),
+      "invalidAuctionState",
+    );
   }
 
   const contract = match.contract;

@@ -30,7 +30,7 @@ form. **Advanced** settings sit in a collapsed section and all have defaults.
 | Include 8s and 7s (56) | Yes / No. Only offered when cards divide evenly (rules §3). | none | Basic |
 | Illegal-play mode | **Block** or **Auto-stop** (§4) | none | Basic |
 | Starting tokens per team | Whole number from 1–999 | 10 | Advanced |
-| Stake tiers | Gap-free bid thresholds; each win/loss stake is a whole number from 1–999 | rules §7.1 | Advanced |
+| Stake tiers | Gap-free bid thresholds; each win/loss stake is a whole number from 1–999, non-decreasing as the bid rises | rules §7.1 | Advanced |
 | Redeal point threshold | Whole number from 0 through the game/player cap in rules §9 | 56: 2, 28: 1 | Advanced |
 | Surrender option | Off / On (§5) | Off | Advanced |
 | Round history | None / Last round / Full (§7) | Last round | Advanced |

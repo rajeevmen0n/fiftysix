@@ -155,7 +155,8 @@ export function stakeFor(config: EngineConfig, amount: number): StakeTier;
 - [x] Validate every config rule: game/player-count combinations; 28 requiring eights/sevens;
   56 card divisibility; starting tokens and every stake as whole numbers from 1–999; redeal
   threshold from zero through the game/player cap (56: 13/8/6 for 4/6/8 players; 28: 6); and
-  ordered, gap-free, non-overlapping stake tiers covering exactly 28–56 or 14–28.
+  ordered, gap-free, non-overlapping stake tiers covering exactly 28–56 or 14–28, whose win and
+  loss stakes must each be non-decreasing as the bid rises.
 - [x] Implement tier lookup, multiplier application, affordability predicates for bid/double/
   redouble, and capped token transfer that never produces a negative balance.
 - [x] Run deterministic one-off checks for all valid deck sizes/configurations, total points,
@@ -207,7 +208,7 @@ export type EngineAction =
   | {type: "restartSession"; source: {type: "system"}; firstDealer: Seat};
 export type EngineRejectionCode =
   | "invalidConfig" | "invalidSeat" | "actionNotAllowed" | "invalidDeck"
-  | "notYourTurn" | "bidTooLow" | "bidOutOfRange" | "cannotAfford"
+  | "notYourTurn" | "invalidBid" | "bidTooLow" | "bidOutOfRange" | "cannotAfford"
   | "doubleNotAllowed" | "noDoubleActive" | "cardNotInHand"
   | "faceDownNotPlayable" | "surrenderVoteRunning" | "revealNotAllowed" | "illegalPlay";
 export type IllegalPlayKind =
@@ -295,7 +296,7 @@ export function redealReason(holdings: readonly (readonly Card[])[], threshold: 
 
 ---
 
-### [ ] E004: Implement the shared auction and complete 56 contracts
+### [x] E004: Implement the shared auction and complete 56 contracts
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
@@ -317,24 +318,24 @@ export function decideAuctionAction(state: EngineState, action: EngineAction): D
 export function contractMultiplier(auction: AuctionState): 1 | 2 | 4;
 ```
 
-- [ ] Implement turn advancement, call history, highest bid, consecutive passes, double state,
+- [x] Implement turn advancement, call history, highest bid, consecutive passes, double state,
   carried-bid slot, and out-of-turn redouble in one shared auction model. A pass affects only its
   turn; partners and the same bidder may overbid.
-- [ ] Validate 56 bids at 28–56, strictly above the current amount, with required suit/no-trump
+- [x] Validate 56 bids at 28–56, strictly above the current amount, with required suit/no-trump
   and required style only for suit bids. Enforce the bidding team's loss-stake affordability.
-- [ ] Allow a turn-bound defender double at any amount, including 56, only with an unforced high
+- [x] Allow a turn-bound defender double at any amount, including 56, only with an unforced high
   bid and funds for twice its win stake. Allow any doubled-team member to redouble out of turn
   with funds for four times the loss stake. Any new bid cancels the double.
-- [ ] End a normal auction after N−1 passes following a bid, a doubled auction before the turn
+- [x] End a normal auction after N−1 passes following a bid, a doubled auction before the turn
   returns to the doubler, and a redouble immediately. After N opening passes create the exempt,
   undoubleable forced 28 no-trump contract for the first bidder.
-- [ ] Emit the exact ordered public auction events and fix the contract bidder/team, amount,
+- [x] Emit the exact ordered public auction events and fix the contract bidder/team, amount,
   trump, style, multiplier, and forced marker. Emit `playStarted(dealer + 1)` for completed 56
   auctions.
-- [ ] Add and run automated tests for 4/6/8-player turn cycles, pass-then-later-bid, partner/self
+- [x] Add and run automated tests for 4/6/8-player turn cycles, pass-then-later-bid, partner/self
   overbids, minimum/maximum bids, affordability edges, double cancellation, doubled pass
   termination, out-of-turn redouble, forced bid, and every named rejection.
-- [ ] Run typecheck, lint, build, state/event replay checks, and `git diff --check`; require
+- [x] Run typecheck, lint, build, state/event replay checks, and `git diff --check`; require
   success. Update plan/progress and commit `feat(engine): implement auction rules`.
 
 ---

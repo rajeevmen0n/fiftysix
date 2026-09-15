@@ -16,6 +16,12 @@ export type {
   SystemSource,
 } from "./actions.js";
 export {
+  type BidRange,
+  bidRange,
+  contractMultiplier,
+  decideAuctionAction,
+} from "./auction.js";
+export {
   buildDeck,
   cardPoints,
   cardsEqual,

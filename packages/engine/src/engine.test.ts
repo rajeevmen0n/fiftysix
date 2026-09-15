@@ -18,6 +18,7 @@ import type {
   MatchState,
   MatchSummary,
 } from "./state.js";
+import { deepFreeze } from "./test-helpers.js";
 import type { Card, EngineConfig } from "./types.js";
 
 function config56(overrides: Partial<EngineConfig> = {}): EngineConfig {
@@ -61,16 +62,6 @@ function started(config: EngineConfig, firstDealer: number) {
     throw new Error("unreachable");
   }
   return result;
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object") {
-    for (const child of Object.values(value)) {
-      deepFreeze(child);
-    }
-    Object.freeze(value);
-  }
-  return value;
 }
 
 function assertJsonSafe(value: unknown, path = "$"): void {

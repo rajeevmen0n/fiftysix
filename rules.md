@@ -133,7 +133,8 @@ A team can only make a call if it can pay the most it could lose from that call.
   the **loss stake**.
 
 ### 7.1 Stakes (default tiers)
-Tiers can be changed per room (see design.md).
+Tiers can be changed per room (see design.md). A room's tiers must not pay out or cost less at a
+higher bid: each tier's win and loss stake must be at least the previous tier's.
 
 | Game | Bid | Win stake | Loss stake |
 |---|---|---|---|

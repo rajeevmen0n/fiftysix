@@ -10,15 +10,20 @@ const REDEAL_THRESHOLD_CAPS: Readonly<
 };
 
 function isWholeNumberBetween(
-  value: number,
+  value: unknown,
   minimum: number,
   maximum: number,
-): boolean {
-  return Number.isInteger(value) && value >= minimum && value <= maximum;
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
 }
 
 function validateStakeTiers(
-  tiers: readonly StakeTier[],
+  tiers: unknown,
   minimumBid: number,
   maximumBid: number,
   issues: string[],
@@ -29,6 +34,11 @@ function validateStakeTiers(
   }
 
   let expectedFromBid = minimumBid;
+  // design §5.2/rules §7.1: stake tiers are configurable, but a higher tier
+  // must never pay out or cost less than a lower one — `bidRange` relies on
+  // this to return one contiguous affordable range.
+  let previousWinStake: number | null = null;
+  let previousLossStake: number | null = null;
 
   for (const [index, tier] of tiers.entries()) {
     if (tier === null || typeof tier !== "object") {
@@ -36,31 +46,55 @@ function validateStakeTiers(
       continue;
     }
 
-    if (!Number.isInteger(tier.fromBid) || !Number.isInteger(tier.toBid)) {
+    const candidate = tier as Partial<Record<keyof StakeTier, unknown>>;
+    const { fromBid, toBid, winStake, lossStake } = candidate;
+    const fromBidValid =
+      typeof fromBid === "number" && Number.isInteger(fromBid);
+    const toBidValid = typeof toBid === "number" && Number.isInteger(toBid);
+
+    if (!fromBidValid || !toBidValid) {
       issues.push(`stakeTiers[${index}] bid bounds must be whole numbers`);
     }
 
-    if (tier.fromBid !== expectedFromBid) {
+    if (fromBid !== expectedFromBid) {
       issues.push(`stakeTiers[${index}] must start at bid ${expectedFromBid}`);
     }
 
-    if (tier.toBid < tier.fromBid || tier.toBid > maximumBid) {
+    if (fromBidValid && toBidValid && (toBid < fromBid || toBid > maximumBid)) {
       issues.push(`stakeTiers[${index}] has an invalid ending bid`);
     }
 
-    if (!isWholeNumberBetween(tier.winStake, 1, WHOLE_NUMBER_MAX)) {
+    if (!isWholeNumberBetween(winStake, 1, WHOLE_NUMBER_MAX)) {
       issues.push(
         `stakeTiers[${index}].winStake must be a whole number from 1 through 999`,
       );
+    } else {
+      if (previousWinStake !== null && winStake < previousWinStake) {
+        issues.push(
+          `stakeTiers[${index}].winStake must not be lower than the previous tier's`,
+        );
+      }
+      // Keep the last valid value as the comparison baseline. A malformed
+      // middle tier is already rejected, but must not mask a later decrease.
+      previousWinStake = winStake;
     }
 
-    if (!isWholeNumberBetween(tier.lossStake, 1, WHOLE_NUMBER_MAX)) {
+    if (!isWholeNumberBetween(lossStake, 1, WHOLE_NUMBER_MAX)) {
       issues.push(
         `stakeTiers[${index}].lossStake must be a whole number from 1 through 999`,
       );
+    } else {
+      if (previousLossStake !== null && lossStake < previousLossStake) {
+        issues.push(
+          `stakeTiers[${index}].lossStake must not be lower than the previous tier's`,
+        );
+      }
+      previousLossStake = lossStake;
     }
 
-    expectedFromBid = tier.toBid + 1;
+    if (toBidValid) {
+      expectedFromBid = toBid + 1;
+    }
   }
 
   if (expectedFromBid !== maximumBid + 1) {

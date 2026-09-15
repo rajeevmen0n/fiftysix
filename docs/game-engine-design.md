@@ -100,6 +100,7 @@ auctions and hidden trump live in their own modules.
 - a player count not allowed for the game type
 - 8s and 7s with a player count they don't divide evenly into (rules §3)
 - stake tiers with gaps, overlaps, or not covering the whole bid range (56: 28–56, 28: 14–28)
+- stake tiers whose win or loss stake decreases as the bid rises
 - a starting token count or stake value that isn't a whole number from 1 through 999
 - a redeal threshold that isn't a whole number from zero through the cap for that game/player
   count (56: 13/8/6 for 4/6/8 players; 28: 6)
@@ -189,7 +190,7 @@ data that can be saved as JSON.
 
 ### 8.2 Calls
 All calls are rejected with a reason code if their conditions fail (for example `notYourTurn`,
-`bidTooLow`, `bidOutOfRange`, `cannotAfford`, `doubleNotAllowed`, `noDoubleActive`).
+`invalidBid`, `bidTooLow`, `bidOutOfRange`, `cannotAfford`, `doubleNotAllowed`, `noDoubleActive`).
 
 - **`bid`**, on the seat's turn:
   - **Amount** strictly higher than the current highest bid, and in range:
@@ -198,6 +199,10 @@ All calls are rejected with a reason code if their conditions fail (for example 
     - 28 second auction: 21–28 and at least `carriedBid + 1`
   - **56** bids carry a suit or no trump, and suit bids carry a **bid style**
     (`numberFirst` or `suitFirst`). **28** bids are numbers only.
+  - **Malformed bids** (missing suit, an invalid suit string, missing style on a suit bid, an
+    invalid style string, or a style given on a no-trump bid) are rejected with `invalidBid`
+    and a `reason` detail naming the problem (`missingSuit`, `invalidSuit`, `missingStyle`,
+    `invalidStyle`, or `unexpectedStyle`). `bidOutOfRange`/`bidTooLow` are only for the amount.
   - **Affordability**: the bidding team's tokens ≥ the bid's loss stake (rules §4.6).
   - Effects: becomes `highBid`, **cancels any active double** (including a carried-over one)
     and resets `consecutivePasses`. A seat may raise its own or its partner's bid.
@@ -434,6 +439,9 @@ and the face-down card stays hidden.
 | Play | `playStarted(leader)`, `cardPlayed(seat, card, fromFaceDown)`, `roundWon(seat, team, points)`, `disqualified(seat, kind)` |
 | Surrender | `resultDecided(losingTeam)`, `surrenderProposed(seat)`, `surrenderVoted(seat, vote)`, `surrenderFailed`, `surrendered(team)` |
 | End of match | `matchEnded(summary)` |
+
+A bid that cancels an active double emits `bidMade` followed by `doubleCancelled`, in that order,
+in the same action.
 
 Events are the full record of what happened. The service can save them, the UI's animation
 queue plays them in order (design §12.6), and /debug shows them in its event log.

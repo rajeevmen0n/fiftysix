@@ -4,6 +4,17 @@ import {
   type EngineActionType,
   isEngineActionType,
 } from "./actions.js";
+import {
+  decideAuctionAction,
+  evolveAuctionEnded,
+  evolveBidMade,
+  evolveDoubleCancelled,
+  evolveDoubled,
+  evolveForcedBid,
+  evolvePassed,
+  evolvePlayStarted,
+  evolveRedoubled,
+} from "./auction.js";
 import { decideDeal, evolveAuctionStarted, evolveDealt } from "./deal.js";
 import type { EngineEvent, MatchEndedEvent } from "./events.js";
 import { evolveRedealt } from "./redeal.js";
@@ -100,7 +111,7 @@ function routeAction(state: EngineState, action: EngineAction): Decision {
     case "pass":
     case "double":
     case "redouble":
-      return unsupportedAction(state, action);
+      return decideAuctionAction(state, action);
     case "placeCard":
       return unsupportedAction(state, action);
     case "askReveal":
@@ -222,23 +233,31 @@ export function evolve(state: EngineState, event: EngineEvent): EngineState {
       return evolveRedealt(state, event);
     case "auctionStarted":
       return evolveAuctionStarted(state, event);
+    case "bidMade":
+      return evolveBidMade(state, event);
+    case "passed":
+      return evolvePassed(state, event);
+    case "doubled":
+      return evolveDoubled(state, event);
+    case "doubleCancelled":
+      return evolveDoubleCancelled(state, event);
+    case "redoubled":
+      return evolveRedoubled(state, event);
+    case "forcedBid":
+      return evolveForcedBid(state, event);
+    case "auctionEnded":
+      return evolveAuctionEnded(state, event);
+    case "playStarted":
+      return evolvePlayStarted(state, event);
     case "matchEnded":
       return evolveMatchEnded(state, event);
     case "sessionRestarted":
     case "sessionEnded":
     case "nextMatchStarted":
-    case "bidMade":
-    case "passed":
-    case "doubled":
-    case "doubleCancelled":
-    case "redoubled":
-    case "forcedBid":
-    case "auctionEnded":
     case "cardPlaced":
     case "faceDownReturned":
     case "revealAsked":
     case "trumpRevealed":
-    case "playStarted":
     case "cardPlayed":
     case "roundWon":
     case "disqualified":

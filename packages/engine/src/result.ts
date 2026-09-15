@@ -7,6 +7,7 @@ export type EngineRejectionCode =
   | "actionNotAllowed"
   | "invalidDeck"
   | "notYourTurn"
+  | "invalidBid"
   | "bidTooLow"
   | "bidOutOfRange"
   | "cannotAfford"
