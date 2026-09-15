@@ -1096,7 +1096,7 @@ describe("evolveAuctionStarted", () => {
 });
 
 describe("evolveDealt", () => {
-  it("throws instead of silently rebuilding match state for a 28 second deal", () => {
+  it("throws for a 28 second deal without a live match to merge into", () => {
     const config = config28();
     const { state } = started(config, 0);
     const deck = buildDeck(config);

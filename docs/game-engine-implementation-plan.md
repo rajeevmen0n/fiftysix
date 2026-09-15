@@ -340,7 +340,7 @@ export function contractMultiplier(auction: AuctionState): 1 | 2 | 4;
 
 ---
 
-### [ ] E005: Implement 28 auctions, face-down placement, and second deal
+### [x] E005: Implement 28 auctions, face-down placement, and second deal
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
@@ -363,31 +363,31 @@ export function dealSecondStage(state: EngineState): EngineEvent[];
 export function faceDownIsForced(state: EngineState, seat: Seat): boolean;
 ```
 
-- [ ] Run the first 28 auction at 14–28 with number-only bids and the shared pass/double/redouble
+- [x] Run the first 28 auction at 14–28 with number-only bids and the shared pass/double/redouble
   rules. A non-forced winner enters `placingCard`; forced 14 no trump skips placement.
-- [ ] Accept `placeCard` only from the winner and only for a card in that seat's hand. Remove it,
+- [x] Accept `placeCard` only from the winner and only for a card in that seat's hand. Remove it,
   store owner/card with hidden trump, emit `cardPlaced`, then emit the automatic second-stage deal
   from `undealt` in the original order; no second system action exists.
-- [ ] After all eight cards per seat are present, run the same stable redeal check over complete
+- [x] After all eight cards per seat are present, run the same stable redeal check over complete
   holdings: include the face-down card in its owner's points and team-Jack membership. A redeal
   returns the face-down card, cancels both auction histories/contract state, logs the public
   first-auction facts with no token movement, and keeps the dealer.
-- [ ] Unless the first auction was redoubled, begin `28-second` at dealer + 1 with minimum 21 or
+- [x] Unless the first auction was redoubled or its bid was 28, begin `28-second` at dealer + 1 with minimum 21 or
   carried amount + 1. Give every seat a turn. Preserve a carried double, allow its redouble, and
   cancel it on any new bid.
-- [ ] Give all four seats one call in the initial second-auction circuit even when a double
+- [x] Give all four seats one call in the initial second-auction circuit even when a double
   carried over; reaching the original doubler does not end that circuit. After N passes with no
   new second-auction bid, keep the bidder, amount, multiplier, and face-down card. A carried
   forced 14 becomes no trump. When there is a new winner—including a
   self-raise—emit `faceDownReturned`, restore the old card, and require the new winner to place
   any card before play.
-- [ ] If the first auction was redoubled, skip the second auction after deal/redeal checking and
+- [x] If the first auction was redoubled or its bid was 28, skip the second auction after deal/redeal checking and
   start play immediately with the placed hidden trump. Start all completed 28 contracts with the
   dealer's right leading.
-- [ ] Add and run automated tests for forced 14, normal/redoubled first auctions, every
+- [x] Add and run automated tests for forced 14, normal/redoubled first auctions, every
   second-auction minimum, all-pass carry, carried double/redouble, cancellation by raise,
   same-holder replacement, different winner, second-deal redeal, and illegal placement.
-- [ ] Run typecheck, lint, build, event replay/card-conservation checks, and `git diff --check`;
+- [x] Run typecheck, lint, build, event replay/card-conservation checks, and `git diff --check`;
   require success. Update plan/progress and commit `feat(engine): implement 28 auction flow`.
 
 ---

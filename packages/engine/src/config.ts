@@ -1,6 +1,20 @@
+import type { AuctionStage } from "./state.js";
 import type { ConfigRejection, EngineConfig, StakeTier } from "./types.js";
 
 const WHOLE_NUMBER_MAX = 999;
+
+/**
+ * Rules §4.2/§10.2, design §8.2: the amount range of each auction stage. The
+ * 56 and 28 first-auction minimums are also the forced bid (rules §4.3). A
+ * 28 second-auction bid must additionally beat the carried bid.
+ */
+export const AUCTION_BID_LIMITS: Readonly<
+  Record<AuctionStage, Readonly<{ minimum: number; maximum: number }>>
+> = {
+  "56": { minimum: 28, maximum: 56 },
+  "28-first": { minimum: 14, maximum: 28 },
+  "28-second": { minimum: 21, maximum: 28 },
+};
 
 const REDEAL_THRESHOLD_CAPS: Readonly<
   Record<EngineConfig["gameType"], Readonly<Record<number, number>>>
@@ -165,9 +179,14 @@ export function validateConfig(config: EngineConfig): ConfigRejection | null {
   }
 
   if (gameTypeValid) {
-    const minimumBid = config.gameType === "56" ? 28 : 14;
-    const maximumBid = config.gameType === "56" ? 56 : 28;
-    validateStakeTiers(config.stakeTiers, minimumBid, maximumBid, issues);
+    const limits =
+      AUCTION_BID_LIMITS[config.gameType === "56" ? "56" : "28-first"];
+    validateStakeTiers(
+      config.stakeTiers,
+      limits.minimum,
+      limits.maximum,
+      issues,
+    );
   }
 
   if (issues.length === 0) {

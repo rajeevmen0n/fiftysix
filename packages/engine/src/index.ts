@@ -31,7 +31,7 @@ export {
   SUITS,
 } from "./cards.js";
 export { validateConfig } from "./config.js";
-export { dealCards, validateDeck } from "./deal.js";
+export { dealCards, dealSecondStage, validateDeck } from "./deal.js";
 export { act, decide, evolve, newSession } from "./engine.js";
 export type {
   AuctionEndedEvent,
@@ -55,6 +55,7 @@ export type {
   MatchEvent,
   NextMatchStartedEvent,
   PassedEvent,
+  PlacingCardStartedEvent,
   PlayEvent,
   PlayStartedEvent,
   RedealtEvent,
@@ -74,6 +75,7 @@ export type {
   TrumpEvent,
   TrumpRevealedEvent,
 } from "./events.js";
+export { decidePlaceCard, faceDownIsForced } from "./hidden-trump.js";
 export {
   assertEngineInvariants,
   type EngineInvariantCode,

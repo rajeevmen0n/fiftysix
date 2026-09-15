@@ -140,7 +140,11 @@ data that can be saved as JSON.
   - `redoubled`
   - `consecutivePasses`
   - `carriedBid`: 28 second auction only; the first-auction bid with its double status
-- `contract`, set when the auctions end:
+- `contract`, set when an auction ends. In 28 it is set when the first auction ends (after the
+  face-down card is placed, or at the forced bid) and stands as the first-auction contract
+  through the second auction and any placement after it; a double or redouble made in the second
+  auction is recorded in the auction state only. It is replaced when the second auction ends
+  (`auctionEnded`, after a new winner places) before play.
   - `bidder` seat and team
   - `amount`
   - `trump`: a suit, `noTrump`, or `hidden(suit)`
@@ -202,7 +206,11 @@ All calls are rejected with a reason code if their conditions fail (for example 
   - **Malformed bids** (missing suit, an invalid suit string, missing style on a suit bid, an
     invalid style string, or a style given on a no-trump bid) are rejected with `invalidBid`
     and a `reason` detail naming the problem (`missingSuit`, `invalidSuit`, `missingStyle`,
-    `invalidStyle`, or `unexpectedStyle`). `bidOutOfRange`/`bidTooLow` are only for the amount.
+    `invalidStyle`, or `unexpectedStyle`). A **28** bid that carries a `suit` field (including
+    `suit: null`) is rejected with `invalidBid` and reason `unexpectedSuit`; a 28 bid carrying a
+    `style` field is rejected with `unexpectedStyle`. The client never offers or sends a suit
+    for a 28 bid, and the protocol schema must reject one, so this rejection is only a
+    server-side guard. `bidOutOfRange`/`bidTooLow` are only for the amount.
   - **Affordability**: the bidding team's tokens ≥ the bid's loss stake (rules §4.6).
   - Effects: becomes `highBid`, **cancels any active double** (including a carried-over one)
     and resets `consecutivePasses`. A seat may raise its own or its partner's bid.
@@ -232,19 +240,25 @@ Checked after every call:
   and its face-down card all stand. This full initial circuit is an exception to the usual
   doubled-auction termination: a double carried from the first auction doesn't end the second
   auction early when the turn first reaches its original doubler.
-- On end: event `auctionEnded(contract)`.
+- On end: event `auctionEnded(contract)` when the contract is known. A 28 auction whose winner
+  must place a face-down card instead emits the public event `placingCardStarted(seat)` and
+  enters `placingCard`; `auctionEnded` follows `cardPlaced` (§8.4). A 28 match can therefore
+  emit `auctionEnded` twice: once for each auction.
 
 ### 8.4 28: face-down card and second deal (rules §10.2)
 - **`placeCard(card)`**, from the auction winner in `placingCard`:
-  - The card must be in their hand. Its suit becomes the **hidden trump**.
+  - The card must be in their hand. Its suit becomes the **hidden trump**. Otherwise rejected
+    with `notYourTurn` (another seat) or `cardNotInHand`.
   - The card leaves the hand and becomes `faceDown`.
-  - Event `cardPlaced(seat, card)`.
+  - Event `cardPlaced(seat, card)`, then `auctionEnded(contract)` with `hidden(suit)` trump.
 - **After the first auction**:
   1. If the contract is **forced 14 no trump**, no card is placed. Otherwise the winner places one.
   2. The engine deals `undealt` (event `dealt(second, …)`). No system action is needed.
   3. The redeal check runs (§7.1).
-  4. If the first auction ended in a **redouble**, play starts. Otherwise the second auction
-     starts, with the first-auction bid as `carriedBid`.
+  4. If the first auction ended in a **redouble**, or its bid is **28** (doubled or not), play
+     starts with the placed hidden trump and the first-auction contract, including its
+     multiplier. Otherwise the second auction starts, with the first-auction bid as
+     `carriedBid`; the first-auction `contract` stands until the second auction ends (§6.3).
 - **After the second auction**:
   - **New winner** (including the holder raising their own bid): any earlier face-down card goes
     back to its owner's hand (event `faceDownReturned(seat, card)`), and the winner places a card
@@ -252,6 +266,19 @@ Checked after every call:
   - **No new bid**: everything carried over stands. A forced 14 no trump that stands is played
     as **no trump**, with no face-down card.
 - The carried bid can be doubled (unless forced), and a carried double can be redoubled.
+- **Event orders**:
+  - First auction won normally or by redouble: `passed` or `redoubled`, then
+    `placingCardStarted(winner)`. Then `placeCard`: `cardPlaced`, `auctionEnded`,
+    `dealt(second)`, then `auctionStarted(28-second)`, or `playStarted` for a redoubled or 28
+    first auction.
+  - Forced 14: `passed`, `forcedBid`, `auctionEnded`, `dealt(second)`,
+    `auctionStarted(28-second)`.
+  - Redeal after the second deal: `dealt(second)`, `redealt`, `faceDownReturned` (only when a
+    card was placed), `matchEnded(redealt)`.
+  - Second auction with a new winner: `passed` or `redoubled`, `faceDownReturned` (when a card
+    is face down), `placingCardStarted(winner)`. Then `placeCard`: `cardPlaced`, `auctionEnded`,
+    `playStarted`.
+  - Second auction with no new bid: `passed` or `redoubled`, `auctionEnded`, `playStarted`.
 
 ### 8.5 Start of play
 - The `contract` is fixed with bidder, amount, trump, multiplier and `forced`.
@@ -399,7 +426,9 @@ and the face-down card stays hidden.
   - dealer
   - nullable summary contract (bidder, amount, public trump state, bid style, multiplier, forced);
     it is null when a restart occurs before any contract exists, and an unrevealed 28 trump is
-    stored only as `hidden` without its suit or face-down card
+    stored only as `hidden` without its suit or face-down card. In 28 the contract is set when
+    the first auction ends and replaced when the second auction ends (§6.3), so a restart during
+    the second auction or its placement logs the public first-auction contract
   - points per team
   - tokens moved and running tokens
   - outcome: `made`, `failed`, `disqualified(seat, kind)`, `surrendered(team)`,
@@ -407,8 +436,8 @@ and the face-down card stays hidden.
 
   Scored outcomes and every host restart are appended to `matchLog`. A 56 automatic redeal is
   emitted for its transient notice but isn't appended. A 28 automatic redeal is appended because
-  its first auction already occurred; its summary contains the public first-auction facts and
-  zero token movement. Canonical summaries erase the unrevealed suit/card rather than relying only
+  its first auction already occurred; the redeal check runs before any second auction starts, so
+  its summary contains the public first-auction contract and zero token movement. Canonical summaries erase the unrevealed suit/card rather than relying only
   on view redaction. This prevents a later occupant of the old bidder's seat from learning it
   after players move.
 
@@ -435,7 +464,7 @@ and the face-down card stays hidden.
 | Session | `sessionStarted(firstDealer, tokens)`, `sessionRestarted(firstDealer)`, `sessionEnded(winner)`, `nextMatchStarted(dealer)` |
 | Deal | `dealt(stage, hands)`, `redealt(reason)` |
 | Auction | `auctionStarted(stage, firstTurn, minBid)`, `bidMade(seat, amount, suit?, style?)`, `passed(seat)`, `doubled(seat)`, `doubleCancelled`, `redoubled(seat)`, `forcedBid(seat, amount)`, `auctionEnded(contract)` |
-| 28 face-down card | `cardPlaced(seat, card)`, `faceDownReturned(seat, card)`, `revealAsked(seat)`, `trumpRevealed(card)` |
+| 28 face-down card | `placingCardStarted(seat)`, `cardPlaced(seat, card)`, `faceDownReturned(seat, card)`, `revealAsked(seat)`, `trumpRevealed(card)` |
 | Play | `playStarted(leader)`, `cardPlayed(seat, card, fromFaceDown)`, `roundWon(seat, team, points)`, `disqualified(seat, kind)` |
 | Surrender | `resultDecided(losingTeam)`, `surrenderProposed(seat)`, `surrenderVoted(seat, vote)`, `surrenderFailed`, `surrendered(team)` |
 | End of match | `matchEnded(summary)` |
@@ -453,6 +482,7 @@ queue plays them in order (design §12.6), and /debug shows them in its event lo
 - `cardPlaced`, `faceDownReturned`: the card is shown only to its owner. Others see that a card
   was placed or returned.
 - `auctionEnded` in 28: trump is shown as `hidden` to everyone except the bidder.
+- `placingCardStarted`: public, not redacted.
 - `roundWon`: `points` removed when live points are off.
 - `resultDecided`: sent only to seats on the losing team.
 - All other events are public.

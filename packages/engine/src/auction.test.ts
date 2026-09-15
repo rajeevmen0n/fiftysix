@@ -34,23 +34,6 @@ function config56(overrides: Partial<EngineConfig> = {}): EngineConfig {
   };
 }
 
-function config28(): EngineConfig {
-  return {
-    gameType: "28",
-    playerCount: 4,
-    includeEightsAndSevens: true,
-    illegalPlayMode: "block",
-    startingTokens: 10,
-    stakeTiers: [
-      { fromBid: 14, toBid: 19, winStake: 1, lossStake: 2 },
-      { fromBid: 20, toBid: 27, winStake: 2, lossStake: 3 },
-      { fromBid: 28, toBid: 28, winStake: 3, lossStake: 4 },
-    ],
-    redealThreshold: 1,
-    surrenderOption: "off",
-  };
-}
-
 const seat = (value: number) => ({ type: "seat", seat: value }) as const;
 const system = { type: "system" } as const;
 
@@ -831,30 +814,6 @@ describe("contractMultiplier", () => {
   });
 });
 
-describe("28's first auction is out of scope for this unit", () => {
-  it("rejects calls in a 28-first auction as not yet implemented", () => {
-    const config = config28();
-    const start = newSession(config, 0);
-    assert.equal(start.ok, true);
-    if (!start.ok) {
-      throw new Error("unreachable");
-    }
-    const dealt = act(start.state, {
-      type: "deal",
-      source: system,
-      deck: buildDeck(config),
-    });
-    assert.equal(dealt.ok, true);
-    if (!dealt.ok) {
-      throw new Error("unreachable");
-    }
-    assert.equal(dealt.state.phase.type, "auction");
-
-    const rejection = decide(dealt.state, pass(1));
-    assert.equal(!rejection.ok && rejection.code, "actionNotAllowed");
-  });
-});
-
 describe("evolveAuctionEnded / evolvePlayStarted", () => {
   it("owns the contract and nested trump stored in state", () => {
     const { state } = dealtAuction(config56(), 0);
@@ -946,46 +905,6 @@ describe("evolveAuctionEnded / evolvePlayStarted", () => {
       config56().playerCount - 1,
     );
     assert.doesNotThrow(() => assertEngineInvariants(completed.state));
-  });
-
-  it("allows the full active initial circuit for a carried 28-second bid", () => {
-    const { state } = dealtAuction(config28(), 0);
-    if (state.phase.type !== "auction" || state.phase.match.auction === null) {
-      throw new Error("unreachable");
-    }
-    const carriedBid = {
-      seat: 1,
-      amount: 20,
-      suit: null,
-      style: null,
-      forced: false,
-    } as const;
-    const match = state.phase.match;
-    const auction = state.phase.match.auction;
-    const secondAuction: AuctionState = {
-      ...auction,
-      stage: "28-second",
-      calls: [
-        { type: "pass", seat: 1 },
-        { type: "pass", seat: 2 },
-        { type: "pass", seat: 3 },
-      ],
-      turn: 0,
-      highBid: carriedBid,
-      doubledBy: 2,
-      consecutivePasses: 3,
-      carriedBid: { bid: carriedBid, doubledBy: 2 },
-    };
-
-    assert.doesNotThrow(() =>
-      assertEngineInvariants({
-        ...state,
-        phase: {
-          type: "auction",
-          match: { ...match, auction: secondAuction },
-        },
-      }),
-    );
   });
 
   it("throw instead of silently recovering from a phase mismatch", () => {

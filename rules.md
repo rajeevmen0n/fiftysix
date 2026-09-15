@@ -221,6 +221,8 @@ threshold below the average points per player:
      double stand; only a redouble or a new bid ends or changes that circuit sooner.
    - If the first auction ended in a **redouble**, there is no second auction. The second
      deal happens and play begins.
+   - If the first-auction bid is **28**, doubled or not, no higher bid is possible, so there is no
+     second auction. The second deal happens and play begins.
    - A **forced 14 no trump** from the first auction still has a second auction. If everyone
      passes again, the match is played as 14 no trump, with no trump at all.
    - The end condition, doubles and token limits work as in §4.

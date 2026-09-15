@@ -60,7 +60,10 @@ export type AuctionCall =
 export interface HighBid {
   seat: Seat;
   amount: number;
-  /** 56: a suit or no trump. 28: null (number-only bids). */
+  /**
+   * 56: a suit or no trump. 28: null (number-only bids), or no trump for
+   * the forced 14.
+   */
   suit: BidSuit | null;
   /** 56 suit bids only; otherwise null. */
   style: BidStyle | null;

@@ -1,12 +1,15 @@
 import type { ActionOfType } from "./actions.js";
 import { buildDeck } from "./cards.js";
+import { AUCTION_BID_LIMITS } from "./config.js";
 import type {
   AuctionStartedEvent,
   DealtEvent,
+  EngineEvent,
   MatchEndedEvent,
+  PlayStartedEvent,
   RedealtEvent,
 } from "./events.js";
-import { redealReason } from "./redeal.js";
+import { completeHoldings, redealReason, summaryContract } from "./redeal.js";
 import {
   accept,
   type Decision,
@@ -17,9 +20,11 @@ import { assertSeat, nextSeat } from "./seats.js";
 import type {
   AuctionState,
   EngineState,
+  HighBid,
   MatchState,
   MatchSummary,
   RedealReason,
+  SummaryContract,
 } from "./state.js";
 import type { Card, EngineConfig, Seat } from "./types.js";
 
@@ -112,10 +117,14 @@ export function dealCards(
   return hands;
 }
 
-function redealSummary(state: EngineState, reason: RedealReason): MatchSummary {
+function redealSummary(
+  state: EngineState,
+  reason: RedealReason,
+  contract: SummaryContract | null,
+): MatchSummary {
   return {
     dealer: state.dealer,
-    contract: null,
+    contract,
     points: { A: 0, B: 0 },
     tokensMoved: null,
     tokens: { A: state.tokens.A, B: state.tokens.B },
@@ -127,8 +136,8 @@ function redealSummary(state: EngineState, reason: RedealReason): MatchSummary {
  * Design §7: the system `deal(deck)` action, valid only from `awaitingDeal`.
  * 56 deals the complete deck and runs the redeal check immediately; 28 deals
  * only the first four cards per seat and starts its first auction without a
- * redeal check (rules §9: 28 checks only after the second deal, which is out
- * of scope until the auction that triggers it exists).
+ * redeal check (rules §9: 28 checks only after the automatic second deal, see
+ * `dealSecondStage`).
  */
 export function decideDeal(
   state: EngineState,
@@ -156,7 +165,7 @@ export function decideDeal(
       const redealtEvent: RedealtEvent = { type: "redealt", reason };
       const matchEndedEvent: MatchEndedEvent = {
         type: "matchEnded",
-        summary: redealSummary(state, reason),
+        summary: redealSummary(state, reason, null),
       };
       return accept([dealtEvent, redealtEvent, matchEndedEvent]);
     }
@@ -165,7 +174,7 @@ export function decideDeal(
       type: "auctionStarted",
       stage: "56",
       firstTurn,
-      minBid: 28,
+      minBid: AUCTION_BID_LIMITS["56"].minimum,
     };
     return accept([dealtEvent, auctionStartedEvent]);
   }
@@ -190,9 +199,104 @@ export function decideDeal(
     type: "auctionStarted",
     stage: "28-first",
     firstTurn,
-    minBid: 14,
+    minBid: AUCTION_BID_LIMITS["28-first"].minimum,
   };
   return accept([dealtEvent, auctionStartedEvent]);
+}
+
+/**
+ * Design §8.4 steps 2–4 (rules §9, §10.2): the automatic 28 second deal that
+ * follows the end of the first auction — no system action is involved.
+ *
+ * `state` must already reflect the end of the first auction: `contract` is
+ * set, the winner's face-down card (if any) is placed, and the second-stage
+ * cards are still in `undealt`. Callers (the forced-bid pass and
+ * `placeCard`) build that state by applying their own earlier events with
+ * the matching evolvers, so the redeal check sees exactly what `evolve` will.
+ *
+ * Emits `dealt(second)` with each seat's `undealt` cards in their original
+ * order, then runs the redeal check over complete eight-card holdings
+ * (including the face-down card). On a redeal: `redealt`, `faceDownReturned`
+ * for a placed card, and `matchEnded(redealt)` with the public first-auction
+ * contract and no token movement. Otherwise a first auction that was
+ * redoubled or reached the maximum bid of 28 starts play at the dealer's
+ * right with the first-auction contract; any other first auction starts the
+ * second auction there with minimum 21 or the carried amount + 1.
+ */
+export function dealSecondStage(state: EngineState): EngineEvent[] {
+  const { phase } = state;
+  if (
+    (phase.type !== "auction" && phase.type !== "placingCard") ||
+    phase.match.undealt === null ||
+    phase.match.auction?.stage !== "28-first" ||
+    phase.match.contract === null
+  ) {
+    throw new Error(
+      "dealSecondStage: expected a finished 28 first auction with undealt cards",
+    );
+  }
+  const { match } = phase;
+  const auction = match.auction as AuctionState;
+  const contract = match.contract as NonNullable<MatchState["contract"]>;
+  const undealt = match.undealt as NonNullable<MatchState["undealt"]>;
+
+  const dealtEvent: DealtEvent = {
+    type: "dealt",
+    stage: "second",
+    hands: undealt.map((cards) => cards.map(cloneCard)),
+    undealt: null,
+  };
+
+  const fullHands = match.hands.map((hand, seat) => [
+    ...hand,
+    ...(undealt[seat] ?? []),
+  ]);
+  const reason = redealReason(
+    completeHoldings(fullHands, match.faceDown),
+    state.config.redealThreshold,
+  );
+  const firstTurn = nextSeat(state.dealer, state.config.playerCount);
+
+  if (reason !== null) {
+    const events: EngineEvent[] = [dealtEvent, { type: "redealt", reason }];
+    if (match.faceDown !== null) {
+      events.push({
+        type: "faceDownReturned",
+        seat: match.faceDown.owner,
+        card: cloneCard(match.faceDown.card),
+      });
+    }
+    const matchEndedEvent: MatchEndedEvent = {
+      type: "matchEnded",
+      summary: redealSummary(state, reason, summaryContract(contract)),
+    };
+    events.push(matchEndedEvent);
+    return events;
+  }
+
+  if (
+    auction.redoubled ||
+    contract.amount >= AUCTION_BID_LIMITS["28-second"].maximum
+  ) {
+    // rules §10.2: a redoubled first auction, or one whose bid is already
+    // 28 and can't be overbid, has no second auction.
+    const playStarted: PlayStartedEvent = {
+      type: "playStarted",
+      leader: firstTurn,
+    };
+    return [dealtEvent, playStarted];
+  }
+
+  const auctionStartedEvent: AuctionStartedEvent = {
+    type: "auctionStarted",
+    stage: "28-second",
+    firstTurn,
+    minBid: Math.max(
+      AUCTION_BID_LIMITS["28-second"].minimum,
+      contract.amount + 1,
+    ),
+  };
+  return [dealtEvent, auctionStartedEvent];
 }
 
 function emptyMatchState(event: DealtEvent): MatchState {
@@ -234,22 +338,17 @@ function emptyMatchState(event: DealtEvent): MatchState {
  * that does) after each individual event; only after a full action's
  * events.
  *
- * `stage: "second"` (28's second deal, design §8.4) is not handled: by that
- * point there is live match state (`auction`, `contract`, `faceDown`) from
- * the first auction that must be merged, not discarded by rebuilding a
- * fresh `MatchState`. That merge belongs to the later unit that implements
- * the second deal/auction, so it throws for now rather than silently
- * wiping live state.
+ * `stage: "second"` (28's second deal, design §8.4) instead merges into the
+ * live match: each seat's second-stage cards are appended to its hand in
+ * their original order and `undealt` is cleared. Auction, contract, and
+ * face-down state from the first auction are kept, as is the phase.
  */
 export function evolveDealt(
   state: EngineState,
   event: DealtEvent,
 ): EngineState {
   if (event.stage === "second") {
-    throw new Error(
-      "evolveDealt: dealt(stage: second) is not yet implemented — " +
-        "28's second deal must merge into existing match state, not rebuild it",
-    );
+    return evolveSecondDeal(state, event);
   }
 
   return {
@@ -262,18 +361,105 @@ export function evolveDealt(
   };
 }
 
+function evolveSecondDeal(state: EngineState, event: DealtEvent): EngineState {
+  const { phase } = state;
+  if (
+    (phase.type !== "auction" && phase.type !== "placingCard") ||
+    phase.match.undealt === null ||
+    event.hands.length !== phase.match.hands.length
+  ) {
+    throw new Error(
+      "Cannot apply dealt(second) event: expected a 28 match with undealt cards",
+    );
+  }
+
+  const hands = phase.match.hands.map((hand, seat) => [
+    ...hand.map(cloneCard),
+    ...(event.hands[seat] ?? []).map(cloneCard),
+  ]);
+  const match: MatchState = { ...phase.match, hands, undealt: null };
+  return {
+    config: state.config,
+    tokens: state.tokens,
+    dealer: state.dealer,
+    matchLog: state.matchLog,
+    pastSessions: state.pastSessions,
+    phase: { type: phase.type, match },
+  };
+}
+
+function cloneHighBid(bid: HighBid): HighBid {
+  return {
+    seat: bid.seat,
+    amount: bid.amount,
+    suit: bid.suit,
+    style: bid.style,
+    forced: bid.forced,
+  };
+}
+
 /**
  * Design §13.1: "evolve throws instead of trying to recover." An
- * `auctionStarted` event only ever follows `dealt` within the same `deal`
- * action (design §7), so a mismatched phase here means the event log is
+ * `auctionStarted` event only ever follows `dealt` within the same action
+ * (design §7, §8.4), so a mismatched phase here means the event log is
  * corrupted or misordered — an engine bug, not something to silently paper
  * over by returning `state` unchanged.
+ *
+ * A `28-second` auction (design §8.4) starts from the finished first
+ * auction, in phase `auction` (forced 14) or `placingCard` (after the
+ * face-down card was placed). Its carried bid and double status stand as
+ * the second auction's `highBid`/`doubledBy` until a new call changes them,
+ * and are also kept unchanged in `carriedBid`. The first auction's call
+ * history is replaced by the new auction's. The first-auction contract
+ * stays in `match.contract` as the standing contract; only the second
+ * auction's `auctionEnded` replaces it (design §6.3).
  */
 export function evolveAuctionStarted(
   state: EngineState,
   event: AuctionStartedEvent,
 ): EngineState {
   const { phase } = state;
+
+  if (event.stage === "28-second") {
+    const previous =
+      phase.type === "auction" || phase.type === "placingCard"
+        ? phase.match.auction
+        : null;
+    if (
+      previous === null ||
+      previous.stage !== "28-first" ||
+      previous.highBid === null ||
+      previous.redoubled ||
+      previous.highBid.amount >= AUCTION_BID_LIMITS["28-second"].maximum
+    ) {
+      throw new Error(
+        "Cannot apply auctionStarted(28-second) event: expected a finished 28 first auction that allows a second auction",
+      );
+    }
+    const match = (phase as { match: MatchState }).match;
+    const auction: AuctionState = {
+      stage: event.stage,
+      calls: [],
+      turn: event.firstTurn,
+      highBid: cloneHighBid(previous.highBid),
+      doubledBy: previous.doubledBy,
+      redoubled: false,
+      consecutivePasses: 0,
+      carriedBid: {
+        bid: cloneHighBid(previous.highBid),
+        doubledBy: previous.doubledBy,
+      },
+    };
+    return {
+      config: state.config,
+      tokens: state.tokens,
+      dealer: state.dealer,
+      matchLog: state.matchLog,
+      pastSessions: state.pastSessions,
+      phase: { type: "auction", match: { ...match, auction } },
+    };
+  }
+
   if (phase.type !== "auction") {
     throw new Error(
       `Cannot apply auctionStarted event: expected phase "auction", got "${phase.type}"`,

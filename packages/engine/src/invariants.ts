@@ -1,8 +1,11 @@
+import { carriedBidStands } from "./auction.js";
 import { buildDeck, cardPoints } from "./cards.js";
-import { validateConfig } from "./config.js";
+import { AUCTION_BID_LIMITS, validateConfig } from "./config.js";
 import { assertNever } from "./result.js";
 import { isSeatInRange, teamOf } from "./seats.js";
 import type {
+  AuctionState,
+  Contract,
   EngineState,
   MatchState,
   MatchSummary,
@@ -119,7 +122,14 @@ function checkMatch(
     check(match.auction !== null, "phaseMatchMismatch");
   }
   if (phase === "placingCard") {
-    check(match.auction?.highBid != null, "phaseMatchMismatch");
+    // design §8.4: a finished 28 auction's winner still has to place a card.
+    check(
+      match.auction !== null &&
+        match.auction.stage !== "56" &&
+        match.auction.highBid !== null &&
+        match.faceDown === null,
+      "phaseMatchMismatch",
+    );
   }
   if (phase === "play") {
     check(
@@ -147,26 +157,20 @@ function checkMatch(
     // within the same action. The terminal count remains in the preserved
     // auction data after the phase advances to placingCard or play.
     //
-    // A 28 second auction gives all N seats its initial circuit while only
-    // the carried bid/double stands. A new bid is necessarily higher than
-    // the carried amount, and a new double changes `doubledBy`, so
-    // `carriedBidStillStanding` reads the standing bid off `highBid` here.
-    // E005 decides how it represents a standing carried bid/double in
-    // `highBid` and adjusts these checks (including the `doubledBy !==
-    // null => highBid !== null` one below) to match.
-    const carriedBidStillStanding =
-      auction.stage === "28-second" &&
-      auction.carriedBid !== null &&
-      (auction.highBid === null ||
-        (auction.highBid.seat === auction.carriedBid.bid.seat &&
-          auction.highBid.amount === auction.carriedBid.bid.amount)) &&
-      auction.doubledBy === auction.carriedBid.doubledBy;
-    const hasStandingNonForcedBid =
-      (auction.highBid !== null && !auction.highBid.forced) ||
-      (auction.carriedBid !== null && !auction.carriedBid.bid.forced);
+    // A 28 second auction carries its first-auction bid and double status
+    // as `highBid`/`doubledBy` (recorded unchanged in `carriedBid`). While
+    // every call is a pass the carried bid still stands and all N seats get
+    // their initial circuit, even when a carried double would otherwise end
+    // the auction on reaching its doubler.
+    const expectedStage =
+      state.config.gameType === "56"
+        ? auction.stage === "56"
+        : auction.stage !== "56";
+    check(expectedStage, "invalidAuctionState");
+    const carriedBidStillStanding = carriedBidStands(auction);
     const passLimit = carriedBidStillStanding
       ? playerCount
-      : hasStandingNonForcedBid
+      : auction.highBid !== null && !auction.highBid.forced
         ? playerCount - 1
         : playerCount;
     check(
@@ -179,7 +183,9 @@ function checkMatch(
 
     // design §8.2/§8.4: a double can only stand against the other team's
     // bid, a redouble implies an active double, and the forced bid (exempt
-    // from doubling entirely) can never carry either.
+    // from doubling entirely) can never carry either. The carried
+    // representation keeps the standing bid in `highBid`, so this holds in
+    // the 28 second auction too.
     if (auction.doubledBy !== null) {
       check(auction.highBid !== null, "invalidAuctionState");
       check(
@@ -197,12 +203,17 @@ function checkMatch(
         (auction.doubledBy === null && !auction.redoubled),
       "invalidAuctionState",
     );
+
+    checkAuctionStage(match, auction, phase);
   }
 
   const contract = match.contract;
   if (contract !== null) {
     checkSeat(contract.bidder, playerCount);
     check(contract.team === teamOf(contract.bidder), "contractTeamMismatch");
+    if (phase === "play") {
+      checkPlayTrump(match, contract);
+    }
   }
 
   checkSeat(match.faceDown?.owner ?? null, playerCount);
@@ -255,6 +266,112 @@ function checkMatch(
   );
 
   checkCardLocations(state, match);
+}
+
+/**
+ * design §6.3, §8.4: where each 28 auction stage leaves the undealt cards,
+ * the carried bid, and the face-down card.
+ */
+function checkAuctionStage(
+  match: MatchState,
+  auction: AuctionState,
+  phase: "auction" | "placingCard" | "play",
+): void {
+  const { carriedBid, stage } = auction;
+  if (stage !== "28-second") {
+    check(carriedBid === null, "invalidAuctionState");
+  }
+  if (stage === "56") {
+    check(
+      match.undealt === null && match.faceDown === null,
+      "phaseMatchMismatch",
+    );
+    return;
+  }
+
+  if (stage === "28-first") {
+    // The second deal follows the first auction's end in the same action.
+    // Only a redoubled first auction, or one bid at 28, has no second
+    // auction and goes straight to play after it (rules §10.2).
+    check(
+      match.undealt !== null
+        ? match.faceDown === null && match.contract === null
+        : phase === "play" &&
+            match.contract !== null &&
+            (auction.redoubled ||
+              auction.highBid?.amount ===
+                AUCTION_BID_LIMITS["28-first"].maximum),
+      "phaseMatchMismatch",
+    );
+    return;
+  }
+
+  check(carriedBid !== null && match.undealt === null, "invalidAuctionState");
+  if (carriedBid === null) {
+    return;
+  }
+  // design §6.3: the first-auction contract stands through the second
+  // auction and the placement after it, matching the carried bid; a double
+  // or redouble made in the second auction reaches the contract only through
+  // its `auctionEnded`, which replaces the contract before play.
+  if (phase !== "play") {
+    const { contract } = match;
+    const carried = carriedBid.bid;
+    check(
+      contract !== null &&
+        contract.bidder === carried.seat &&
+        contract.amount === carried.amount &&
+        contract.forced === carried.forced &&
+        contract.multiplier === (carriedBid.doubledBy === null ? 1 : 2) &&
+        (carried.forced
+          ? contract.trump.type === "noTrump"
+          : contract.trump.type === "hidden" &&
+            (match.faceDown === null ||
+              match.faceDown.card.suit === contract.trump.suit)),
+      "invalidAuctionState",
+    );
+  }
+  check(
+    (!carriedBid.bid.forced || carriedBid.doubledBy === null) &&
+      carriedBid.bid.amount < AUCTION_BID_LIMITS["28-second"].maximum,
+    "invalidAuctionState",
+  );
+  if (carriedBidStands(auction)) {
+    // No second-auction bid or double yet: the carried state is intact and,
+    // until a reveal during play, so is its face-down card (none for a
+    // forced 14 no trump).
+    check(
+      auction.highBid !== null &&
+        auction.highBid.seat === carriedBid.bid.seat &&
+        auction.highBid.amount === carriedBid.bid.amount &&
+        auction.highBid.forced === carriedBid.bid.forced &&
+        auction.doubledBy === carriedBid.doubledBy &&
+        (match.revealedInRound !== null ||
+          (carriedBid.bid.forced
+            ? match.faceDown === null
+            : match.faceDown?.owner === carriedBid.bid.seat)),
+      "invalidAuctionState",
+    );
+  }
+}
+
+/**
+ * design §8.4, §9.3: a hidden trump that hasn't been revealed is the
+ * bidder's face-down card; no trump (and every 56 contract) has none.
+ */
+function checkPlayTrump(match: MatchState, contract: Contract): void {
+  if (contract.trump.type === "hidden") {
+    if (match.revealedInRound === null) {
+      check(
+        match.faceDown !== null &&
+          match.faceDown.owner === contract.bidder &&
+          match.faceDown.card.suit === contract.trump.suit,
+        "phaseMatchMismatch",
+      );
+    }
+    return;
+  }
+  check(match.faceDown === null, "phaseMatchMismatch");
 }
 
 function checkCardLocations(state: EngineState, match: MatchState): void {

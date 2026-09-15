@@ -17,6 +17,12 @@ import {
 } from "./auction.js";
 import { decideDeal, evolveAuctionStarted, evolveDealt } from "./deal.js";
 import type { EngineEvent, MatchEndedEvent } from "./events.js";
+import {
+  decidePlaceCard,
+  evolveCardPlaced,
+  evolveFaceDownReturned,
+  evolvePlacingCardStarted,
+} from "./hidden-trump.js";
 import { evolveRedealt } from "./redeal.js";
 import {
   type ActionResult,
@@ -27,7 +33,12 @@ import {
 } from "./result.js";
 import { isSeatInRange } from "./seats.js";
 import { decideSessionStart, evolveSessionStarted } from "./session.js";
-import type { EnginePhaseType, EngineState } from "./state.js";
+import type {
+  EnginePhaseType,
+  EngineState,
+  MatchOutcome,
+  MatchSummary,
+} from "./state.js";
 import type { EngineConfig, Seat } from "./types.js";
 
 // Transition kernel.
@@ -113,7 +124,7 @@ function routeAction(state: EngineState, action: EngineAction): Decision {
     case "redouble":
       return decideAuctionAction(state, action);
     case "placeCard":
-      return unsupportedAction(state, action);
+      return decidePlaceCard(state, action);
     case "askReveal":
     case "playCard":
       return unsupportedAction(state, action);
@@ -171,9 +182,9 @@ function outcomeNotYetImplemented(outcomeType: string): never {
 
 /**
  * Design §7.1/§10.3: only the automatic `redealt` outcome is reachable via
- * `decide()` in this unit (56 after the deal, 28 after the second deal —
- * §7.1). A 56 redeal is a transient notice: the phase reset, unchanged
- * dealer and unchanged tokens are all carried by this event, so its summary
+ * `decide()` so far (56 after the deal, 28 after the second deal — §7.1).
+ * A 56 redeal is a transient notice: the phase reset, unchanged dealer and
+ * unchanged tokens are all carried by this event, so its summary
  * is not appended to `matchLog`. A 28 redeal is appended because its first
  * auction already occurred; its summary carries the public first-auction
  * facts and zero token movement.
@@ -187,6 +198,26 @@ function outcomeNotYetImplemented(outcomeType: string): never {
  * default case): adding a new `MatchOutcome` variant without a case here
  * fails compilation.
  */
+function cloneOutcome(outcome: MatchOutcome): MatchOutcome {
+  return outcome.type === "redealt"
+    ? { type: "redealt", reason: { ...outcome.reason } }
+    : { ...outcome };
+}
+
+function cloneSummary(summary: MatchSummary): MatchSummary {
+  const { contract } = summary;
+  return {
+    dealer: summary.dealer,
+    contract:
+      contract === null ? null : { ...contract, trump: { ...contract.trump } },
+    points: { A: summary.points.A, B: summary.points.B },
+    tokensMoved:
+      summary.tokensMoved === null ? null : { ...summary.tokensMoved },
+    tokens: { A: summary.tokens.A, B: summary.tokens.B },
+    outcome: cloneOutcome(summary.outcome),
+  };
+}
+
 function evolveMatchEnded(
   state: EngineState,
   event: MatchEndedEvent,
@@ -204,9 +235,11 @@ function evolveMatchEnded(
       return outcomeNotYetImplemented(outcome.type);
     case "redealt": {
       const tokens = { A: summary.tokens.A, B: summary.tokens.B };
+      // Own the logged summary so a caller mutating the event can't reach
+      // state.
       const matchLog =
         state.config.gameType === "28"
-          ? [...state.matchLog, summary]
+          ? [...state.matchLog, cloneSummary(summary)]
           : state.matchLog;
 
       return {
@@ -249,13 +282,17 @@ export function evolve(state: EngineState, event: EngineEvent): EngineState {
       return evolveAuctionEnded(state, event);
     case "playStarted":
       return evolvePlayStarted(state, event);
+    case "placingCardStarted":
+      return evolvePlacingCardStarted(state, event);
+    case "cardPlaced":
+      return evolveCardPlaced(state, event);
+    case "faceDownReturned":
+      return evolveFaceDownReturned(state, event);
     case "matchEnded":
       return evolveMatchEnded(state, event);
     case "sessionRestarted":
     case "sessionEnded":
     case "nextMatchStarted":
-    case "cardPlaced":
-    case "faceDownReturned":
     case "revealAsked":
     case "trumpRevealed":
     case "cardPlayed":

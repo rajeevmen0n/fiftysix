@@ -1,5 +1,7 @@
 import type { ActionOfType, EngineAction } from "./actions.js";
 import { SUITS } from "./cards.js";
+import { AUCTION_BID_LIMITS } from "./config.js";
+import { dealSecondStage } from "./deal.js";
 import type {
   AuctionEndedEvent,
   BidMadeEvent,
@@ -8,6 +10,7 @@ import type {
   EngineEvent,
   ForcedBidEvent,
   PassedEvent,
+  PlacingCardStartedEvent,
   PlayStartedEvent,
   RedoubledEvent,
 } from "./events.js";
@@ -18,6 +21,7 @@ import type {
   AuctionCall,
   AuctionState,
   Contract,
+  ContractTrump,
   CurrentRound,
   EngineState,
   HighBid,
@@ -31,21 +35,45 @@ import type {
   Suit,
 } from "./types.js";
 
-// Shared auction rules (design §8, rules §4). This module implements the
-// single 56 auction end to end (turn advancement, call history, doubles,
-// redouble, the forced bid, and the completed contract). 28's first and
-// second auctions (carried bids, the full initial circuit exception, face-down
-// placement) share the same `AuctionState` shape but are implemented by the
-// unit that also builds the face-down/second-deal machinery those endings
-// need (`placingCard`) — see the stage guard in `decideAuctionAction`.
+// Shared auction rules (design §8, rules §4, §10.2). One model serves the 56
+// auction and both 28 auctions: turn advancement, call history, doubles,
+// redouble, the forced bid, and how each stage ends.
+//
+// 28 second auction: the carried first-auction bid and double status stand
+// as `highBid`/`doubledBy` (and stay recorded unchanged in `carriedBid`).
+// While the auction has only passes, the carried bid is still standing and
+// the auction ends only after all N seats pass (design §8.3) — a carried
+// double does not end this initial circuit when the turn reaches its
+// original doubler. Any bid or double in the second auction returns it to
+// the ordinary N − 1 pass ending.
 
 export interface BidRange {
   minimum: number;
   maximum: number;
 }
 
-const MIN_BID_56 = 28;
-const MAX_BID_56 = 56;
+/**
+ * The lowest amount a bid may name right now: the stage minimum (21 in the
+ * 28 second auction), or one more than the standing bid if that's higher.
+ */
+function minimumBid(auction: AuctionState): number {
+  const stageMinimum = AUCTION_BID_LIMITS[auction.stage].minimum;
+  return auction.highBid === null
+    ? stageMinimum
+    : Math.max(stageMinimum, auction.highBid.amount + 1);
+}
+
+/**
+ * design §8.3: a 28 second auction whose carried bid and double status are
+ * untouched — every call so far is a pass — ends only after N passes.
+ */
+export function carriedBidStands(auction: AuctionState): boolean {
+  return (
+    auction.stage === "28-second" &&
+    auction.carriedBid !== null &&
+    auction.calls.every((call) => call.type === "pass")
+  );
+}
 
 function isBidSuit(value: unknown): value is BidSuit {
   return (
@@ -62,8 +90,7 @@ function isBidStyle(value: unknown): value is BidStyle {
  * The amount range a seat could legally bid right now, after affordability
  * (design §12). `null` when it isn't the seat's turn, the auction has
  * already reached the top of its range, or the seat's team can't afford even
- * the minimum. Only the shared 56 auction is implemented; 28's ranges depend
- * on `carriedBid`/second-auction mechanics a later unit adds.
+ * the minimum.
  *
  * This scans downward from the top of the range and returns the first
  * affordable amount as the maximum, which is only a single contiguous range
@@ -76,19 +103,19 @@ export function bidRange(state: EngineState, seat: Seat): BidRange | null {
     return null;
   }
   const auction = state.phase.match.auction;
-  if (auction.stage !== "56" || auction.turn !== seat) {
+  if (auction.turn !== seat) {
     return null;
   }
 
-  const minimum =
-    auction.highBid === null ? MIN_BID_56 : auction.highBid.amount + 1;
-  if (minimum > MAX_BID_56) {
+  const minimum = minimumBid(auction);
+  const stageMaximum = AUCTION_BID_LIMITS[auction.stage].maximum;
+  if (minimum > stageMaximum) {
     return null;
   }
 
   const balance = state.tokens[teamOf(seat)];
   let maximum: number | null = null;
-  for (let amount = MAX_BID_56; amount >= minimum; amount -= 1) {
+  for (let amount = stageMaximum; amount >= minimum; amount -= 1) {
     if (canAffordBid(state.config, amount, balance)) {
       maximum = amount;
       break;
@@ -109,18 +136,23 @@ export function contractMultiplier(auction: AuctionState): 1 | 2 | 4 {
   return 1;
 }
 
-function contractFromHighBid(
+/** A 56 bid names its trump: a suit or no trump. */
+function trump56(highBid: HighBid): ContractTrump {
+  return highBid.suit === "noTrump"
+    ? { type: "noTrump" }
+    : { type: "suit", suit: highBid.suit as Suit };
+}
+
+export function contractFromHighBid(
   highBid: HighBid,
   multiplier: StakeMultiplier,
+  trump: ContractTrump,
 ): Contract {
   return {
     bidder: highBid.seat,
     team: teamOf(highBid.seat),
     amount: highBid.amount,
-    trump:
-      highBid.suit === "noTrump"
-        ? { type: "noTrump" }
-        : { type: "suit", suit: highBid.suit as Suit },
+    trump: { ...trump },
     style: highBid.style,
     multiplier,
     forced: highBid.forced,
@@ -149,31 +181,47 @@ function decideBid(
     return reject("notYourTurn", { expected: auction.turn, actual: seat });
   }
 
-  const suit = action.suit;
-  if (suit === undefined) {
-    return reject("invalidBid", { reason: "missingSuit" });
-  }
-  if (!isBidSuit(suit)) {
-    return reject("invalidBid", { reason: "invalidSuit" });
-  }
-
-  const rawStyle = action.style;
+  let suit: BidSuit | null;
   let style: BidStyle | null;
-  if (suit === "noTrump") {
-    if (rawStyle !== undefined) {
+  if (auction.stage === "56") {
+    const rawSuit = action.suit;
+    if (rawSuit === undefined) {
+      return reject("invalidBid", { reason: "missingSuit" });
+    }
+    if (!isBidSuit(rawSuit)) {
+      return reject("invalidBid", { reason: "invalidSuit" });
+    }
+    suit = rawSuit;
+
+    const rawStyle = action.style;
+    if (suit === "noTrump") {
+      if (rawStyle !== undefined) {
+        return reject("invalidBid", { reason: "unexpectedStyle" });
+      }
+      style = null;
+    } else {
+      if (rawStyle === undefined) {
+        return reject("invalidBid", { reason: "missingStyle" });
+      }
+      if (!isBidStyle(rawStyle)) {
+        return reject("invalidBid", { reason: "invalidStyle" });
+      }
+      style = rawStyle;
+    }
+  } else {
+    // rules §10.2: 28 bids are numbers only. Like `style`, presence is what
+    // is checked, so `suit: null` is rejected too.
+    if (action.suit !== undefined) {
+      return reject("invalidBid", { reason: "unexpectedSuit" });
+    }
+    if (action.style !== undefined) {
       return reject("invalidBid", { reason: "unexpectedStyle" });
     }
+    suit = null;
     style = null;
-  } else {
-    if (rawStyle === undefined) {
-      return reject("invalidBid", { reason: "missingStyle" });
-    }
-    if (!isBidStyle(rawStyle)) {
-      return reject("invalidBid", { reason: "invalidStyle" });
-    }
-    style = rawStyle;
   }
 
+  const limits = AUCTION_BID_LIMITS[auction.stage];
   const amount: unknown = action.amount;
   if (
     typeof amount !== "number" ||
@@ -182,14 +230,14 @@ function decideBid(
   ) {
     return reject("bidOutOfRange", {
       reason: "invalidAmount",
-      minimum: MIN_BID_56,
-      maximum: MAX_BID_56,
+      minimum: limits.minimum,
+      maximum: limits.maximum,
     });
   }
-  if (amount < MIN_BID_56 || amount > MAX_BID_56) {
+  if (amount < limits.minimum || amount > limits.maximum) {
     return reject("bidOutOfRange", {
-      minimum: MIN_BID_56,
-      maximum: MAX_BID_56,
+      minimum: limits.minimum,
+      maximum: limits.maximum,
       amount,
     });
   }
@@ -219,8 +267,79 @@ function decideBid(
   return accept(events);
 }
 
+/**
+ * design §8.3–§8.5: the events that follow the call ending an auction with a
+ * standing `highBid` (the last pass, or a redouble).
+ *
+ * - 56: the contract is complete; play starts at the dealer's right.
+ * - 28 first auction: the winner must place a face-down card.
+ * - 28 second auction with a new bid (including a self-raise): any earlier
+ *   face-down card returns to its owner and the winner places a card.
+ * - 28 second auction with no new bid: the carried bid, its face-down card
+ *   (or a forced 14's no trump) and the current double status stand.
+ */
+function auctionEndEvents(
+  state: EngineState,
+  match: MatchState,
+  auction: AuctionState,
+  highBid: HighBid,
+  multiplier: StakeMultiplier,
+): EngineEvent[] {
+  const leader = nextSeat(state.dealer, state.config.playerCount);
+  const playStarted: PlayStartedEvent = { type: "playStarted", leader };
+  const placingCardStarted: PlacingCardStartedEvent = {
+    type: "placingCardStarted",
+    seat: highBid.seat,
+  };
+
+  switch (auction.stage) {
+    case "56": {
+      const auctionEnded: AuctionEndedEvent = {
+        type: "auctionEnded",
+        contract: contractFromHighBid(highBid, multiplier, trump56(highBid)),
+      };
+      return [auctionEnded, playStarted];
+    }
+    case "28-first":
+      return [placingCardStarted];
+    case "28-second": {
+      const { faceDown } = match;
+      if (auction.calls.some((call) => call.type === "bid")) {
+        const events: EngineEvent[] = [];
+        if (faceDown !== null) {
+          events.push({
+            type: "faceDownReturned",
+            seat: faceDown.owner,
+            card: {
+              suit: faceDown.card.suit,
+              rank: faceDown.card.rank,
+              copy: faceDown.card.copy,
+            },
+          });
+        }
+        events.push(placingCardStarted);
+        return events;
+      }
+      const auctionEnded: AuctionEndedEvent = {
+        type: "auctionEnded",
+        contract: contractFromHighBid(
+          highBid,
+          multiplier,
+          faceDown === null
+            ? { type: "noTrump" }
+            : { type: "hidden", suit: faceDown.card.suit },
+        ),
+      };
+      return [auctionEnded, playStarted];
+    }
+    default:
+      return assertNever(auction.stage, "auctionEndEvents");
+  }
+}
+
 function decidePass(
   state: EngineState,
+  match: MatchState,
   auction: AuctionState,
   action: ActionOfType<"pass">,
 ): Decision {
@@ -231,16 +350,20 @@ function decidePass(
 
   const { playerCount } = state.config;
   const consecutivePasses = auction.consecutivePasses + 1;
-  const events: EngineEvent[] = [{ type: "passed", seat }];
-  const leader = nextSeat(state.dealer, playerCount);
+  const passed: PassedEvent = { type: "passed", seat };
+  const events: EngineEvent[] = [passed];
 
   if (auction.highBid === null) {
     // rules §4.3: everyone passes without a bid — the dealer's right is
-    // forced to take the exempt, undoubleable 28 no-trump contract.
+    // forced to take the exempt, undoubleable no-trump contract at the
+    // stage minimum (28 in 56, 14 in the 28 first auction). A 28 second
+    // auction always has its carried bid standing, so never gets here.
     if (consecutivePasses === playerCount) {
+      const leader = nextSeat(state.dealer, playerCount);
+      const amount = AUCTION_BID_LIMITS[auction.stage].minimum;
       const forcedHighBid: HighBid = {
         seat: leader,
-        amount: MIN_BID_56,
+        amount,
         suit: "noTrump",
         style: null,
         forced: true,
@@ -248,31 +371,46 @@ function decidePass(
       const forcedBid: ForcedBidEvent = {
         type: "forcedBid",
         seat: leader,
-        amount: MIN_BID_56,
+        amount,
       };
       const auctionEnded: AuctionEndedEvent = {
         type: "auctionEnded",
-        contract: contractFromHighBid(forcedHighBid, 1),
+        contract: contractFromHighBid(forcedHighBid, 1, { type: "noTrump" }),
       };
-      const playStarted: PlayStartedEvent = { type: "playStarted", leader };
-      events.push(forcedBid, auctionEnded, playStarted);
+      events.push(forcedBid, auctionEnded);
+      if (auction.stage === "56") {
+        const playStarted: PlayStartedEvent = { type: "playStarted", leader };
+        events.push(playStarted);
+      } else {
+        // design §8.4: forced 14 no trump places no card; the second deal
+        // follows at once.
+        const ended = evolveAuctionEnded(
+          evolveForcedBid(evolvePassed(state, passed), forcedBid),
+          auctionEnded,
+        );
+        events.push(...dealSecondStage(ended));
+      }
     }
     return accept(events);
   }
 
   // design §8.3: a normal auction ends after N−1 passes following the
   // highest bid; a doubled auction ends the same way (N−1 passes after the
-  // double), never letting the bidder/doubler call again.
-  if (consecutivePasses === playerCount - 1) {
-    const auctionEnded: AuctionEndedEvent = {
-      type: "auctionEnded",
-      contract: contractFromHighBid(
+  // double), never letting the bidder/doubler call again. A 28 second
+  // auction's untouched carried bid needs all N passes.
+  const endingPasses = carriedBidStands(auction)
+    ? playerCount
+    : playerCount - 1;
+  if (consecutivePasses === endingPasses) {
+    events.push(
+      ...auctionEndEvents(
+        state,
+        match,
+        auction,
         auction.highBid,
         contractMultiplier(auction),
       ),
-    };
-    const playStarted: PlayStartedEvent = { type: "playStarted", leader };
-    events.push(auctionEnded, playStarted);
+    );
   }
 
   return accept(events);
@@ -309,6 +447,7 @@ function decideDouble(
 
 function decideRedouble(
   state: EngineState,
+  match: MatchState,
   auction: AuctionState,
   action: ActionOfType<"redouble">,
 ): Decision {
@@ -331,14 +470,11 @@ function decideRedouble(
     return reject("cannotAfford", { team: biddingTeam });
   }
 
-  const leader = nextSeat(state.dealer, state.config.playerCount);
   const redoubled: RedoubledEvent = { type: "redoubled", seat };
-  const auctionEnded: AuctionEndedEvent = {
-    type: "auctionEnded",
-    contract: contractFromHighBid(highBid, 4),
-  };
-  const playStarted: PlayStartedEvent = { type: "playStarted", leader };
-  return accept([redoubled, auctionEnded, playStarted]);
+  return accept([
+    redoubled,
+    ...auctionEndEvents(state, match, auction, highBid, 4),
+  ]);
 }
 
 /** The seat actions this module decides — the only ones `decide()`'s
@@ -362,8 +498,7 @@ function isAuctionCallAction(
 
 /**
  * Decides `bid`, `pass`, `double` and `redouble` in one shared auction model
- * (design §8). Only the 56 auction (a single, uncarried auction) is wired to
- * a completed contract here; 28's auctions are a later unit's responsibility.
+ * (design §8) for the 56 auction and both 28 auctions.
  *
  * `decide()`'s `ACTION_PHASES` table only ever calls this while
  * `state.phase.type === "auction"` with one of the four call action types,
@@ -388,26 +523,18 @@ export function decideAuctionAction(
       phase: state.phase.type,
     });
   }
-  const auction = state.phase.match.auction;
-
-  if (auction.stage !== "56") {
-    // 28's first/second auctions are implemented alongside the face-down
-    // card and second deal they end into.
-    return reject("actionNotAllowed", {
-      action: action.type,
-      stage: auction.stage,
-    });
-  }
+  const { match } = state.phase;
+  const auction = match.auction as AuctionState;
 
   switch (action.type) {
     case "bid":
       return decideBid(state, auction, action);
     case "pass":
-      return decidePass(state, auction, action);
+      return decidePass(state, match, auction, action);
     case "double":
       return decideDouble(state, auction, action);
     case "redouble":
-      return decideRedouble(state, auction, action);
+      return decideRedouble(state, match, auction, action);
     default:
       return assertNever(action, "decideAuctionAction");
   }
@@ -416,7 +543,7 @@ export function decideAuctionAction(
 // ---------------------------------------------------------------------------
 // Evolvers (design §13.1: throw instead of trying to recover from a
 // corrupted or misordered event log; these events only ever follow an
-// active 56 auction produced by `decideAuctionAction`).
+// active auction produced by `decideAuctionAction`).
 
 function requireAuction(
   state: EngineState,
@@ -559,30 +686,54 @@ export function evolveForcedBid(
   return withAuctionState(state, match, { ...auction, highBid });
 }
 
+/**
+ * Fixes the contract. Emitted while the auction phase is still current (56,
+ * a forced 14, a 28 second auction whose carried bid stands) or right after
+ * `cardPlaced` in `placingCard` (design §8.4). The phase is unchanged:
+ * `playStarted`, `auctionStarted(28-second)`, or a redeal's `matchEnded`
+ * follows in the same action.
+ */
 export function evolveAuctionEnded(
   state: EngineState,
   event: AuctionEndedEvent,
 ): EngineState {
-  const { match, auction } = requireAuction(state, event.type);
-  return withAuctionState(
-    state,
-    { ...match, contract: cloneContract(event.contract) },
-    auction,
-  );
+  const { phase } = state;
+  if (
+    (phase.type !== "auction" && phase.type !== "placingCard") ||
+    phase.match.auction === null
+  ) {
+    throw new Error(
+      "Cannot apply auctionEnded event: expected an auction or card placement",
+    );
+  }
+  return {
+    config: state.config,
+    tokens: state.tokens,
+    dealer: state.dealer,
+    matchLog: state.matchLog,
+    pastSessions: state.pastSessions,
+    phase: {
+      type: phase.type,
+      match: { ...phase.match, contract: cloneContract(event.contract) },
+    },
+  };
 }
 
 /**
  * Design §8.5: fixes the contract's play state. `evolveAuctionEnded` (which
  * always precedes this event within the same action) has already set
  * `match.contract`; this evolver only adds the empty `currentRound` and
- * moves the phase from `auction` to `play`.
+ * moves the phase from `auction` (or 28's `placingCard`) to `play`.
  */
 export function evolvePlayStarted(
   state: EngineState,
   event: PlayStartedEvent,
 ): EngineState {
   const { phase } = state;
-  if (phase.type !== "auction" || phase.match.contract === null) {
+  if (
+    (phase.type !== "auction" && phase.type !== "placingCard") ||
+    phase.match.contract === null
+  ) {
     throw new Error(
       "Cannot apply playStarted event: expected a finalized auction contract",
     );

@@ -82,6 +82,16 @@ export type AuctionEvent =
   | AuctionEndedEvent;
 
 // 28 face-down card
+/**
+ * A 28 auction ended with a winner who must place a face-down card (design
+ * §8.3–§8.4): moves the match from `auction` to `placingCard`. Public. The
+ * contract's hidden trump — and so `auctionEnded(contract)` — is only known
+ * once the card is placed.
+ */
+export type PlacingCardStartedEvent = {
+  type: "placingCardStarted";
+  seat: Seat;
+};
 export type CardPlacedEvent = { type: "cardPlaced"; seat: Seat; card: Card };
 export type FaceDownReturnedEvent = {
   type: "faceDownReturned";
@@ -92,6 +102,7 @@ export type RevealAskedEvent = { type: "revealAsked"; seat: Seat };
 export type TrumpRevealedEvent = { type: "trumpRevealed"; card: Card };
 
 export type TrumpEvent =
+  | PlacingCardStartedEvent
   | CardPlacedEvent
   | FaceDownReturnedEvent
   | RevealAskedEvent
