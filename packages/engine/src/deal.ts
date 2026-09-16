@@ -9,22 +9,20 @@ import type {
   PlayStartedEvent,
   RedealtEvent,
 } from "./events.js";
-import { completeHoldings, redealReason, summaryContract } from "./redeal.js";
+import { completeHoldings, redealReason } from "./redeal.js";
 import {
   accept,
   type Decision,
   type EngineRejection,
   reject,
 } from "./result.js";
+import { matchSummary } from "./scoring.js";
 import { assertSeat, nextSeat } from "./seats.js";
 import type {
   AuctionState,
   EngineState,
   HighBid,
   MatchState,
-  MatchSummary,
-  RedealReason,
-  SummaryContract,
 } from "./state.js";
 import type { Card, EngineConfig, Seat } from "./types.js";
 
@@ -117,21 +115,6 @@ export function dealCards(
   return hands;
 }
 
-function redealSummary(
-  state: EngineState,
-  reason: RedealReason,
-  contract: SummaryContract | null,
-): MatchSummary {
-  return {
-    dealer: state.dealer,
-    contract,
-    points: { A: 0, B: 0 },
-    tokensMoved: null,
-    tokens: { A: state.tokens.A, B: state.tokens.B },
-    outcome: { type: "redealt", reason },
-  };
-}
-
 /**
  * Design §7: the system `deal(deck)` action, valid only from `awaitingDeal`.
  * 56 deals the complete deck and runs the redeal check immediately; 28 deals
@@ -165,7 +148,12 @@ export function decideDeal(
       const redealtEvent: RedealtEvent = { type: "redealt", reason };
       const matchEndedEvent: MatchEndedEvent = {
         type: "matchEnded",
-        summary: redealSummary(state, reason, null),
+        summary: matchSummary(
+          state,
+          { type: "redealt", reason },
+          null,
+          state.tokens,
+        ),
       };
       return accept([dealtEvent, redealtEvent, matchEndedEvent]);
     }
@@ -268,7 +256,12 @@ export function dealSecondStage(state: EngineState): EngineEvent[] {
     }
     const matchEndedEvent: MatchEndedEvent = {
       type: "matchEnded",
-      summary: redealSummary(state, reason, summaryContract(contract)),
+      summary: matchSummary(
+        state,
+        { type: "redealt", reason },
+        null,
+        state.tokens,
+      ),
     };
     events.push(matchEndedEvent);
     return events;

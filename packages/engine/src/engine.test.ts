@@ -522,7 +522,12 @@ describe("assertEngineInvariants", () => {
     const over = (
       tokens: { A: number; B: number },
       phase: EngineState["phase"],
-    ): EngineState => ({ ...base, tokens, phase });
+    ): EngineState => ({
+      ...base,
+      tokens,
+      matchLog: "summary" in phase ? [phase.summary] : [],
+      phase,
+    });
 
     assert.equal(
       invariantCode(over({ A: 14, B: 10 }, { type: "matchOver", summary })),
@@ -1019,9 +1024,51 @@ describe("evolveMatchEnded", () => {
     };
   }
 
+  /**
+   * A redeal always ends a match that is in progress: `evolveDealt` opens the
+   * auction and `evolveRedealt` is a transient no-op, so `matchEnded(redealt)`
+   * lands on an `auction` phase, never on `awaitingDeal`.
+   */
+  function dealtState(config: EngineConfig): EngineState {
+    const { state } = started(config, 0);
+    const seats = config.playerCount;
+    const hands: Card[][] = Array.from({ length: seats }, () => []);
+    buildDeck(config).forEach((card, index) => {
+      hands[(1 + index) % seats]?.push(card);
+    });
+
+    if (config.gameType !== "28") {
+      const next = evolve(state, {
+        type: "dealt",
+        stage: "full",
+        hands,
+        undealt: null,
+      });
+      assert.equal(next.phase.type, "auction");
+      return next;
+    }
+
+    // 28 deals in two stages; a redeal is only detected after the second.
+    const half = hands.map((hand) => hand.length / 2);
+    const first = evolve(state, {
+      type: "dealt",
+      stage: "first",
+      hands: hands.map((hand, index) => hand.slice(0, half[index])),
+      undealt: hands.map((hand, index) => hand.slice(half[index])),
+    });
+    const second = evolve(first, {
+      type: "dealt",
+      stage: "second",
+      hands: hands.map((hand, index) => hand.slice(half[index])),
+      undealt: null,
+    });
+    assert.equal(second.phase.type, "auction");
+    return second;
+  }
+
   it("design §10.3: appends a 28 automatic redeal to matchLog but not a 56 one", () => {
     const config56Value = config56();
-    const { state: state56 } = started(config56Value, 0);
+    const state56 = dealtState(config56Value);
     const summary56 = redealSummary(config56Value, 0);
     const result56 = evolve(state56, {
       type: "matchEnded",
@@ -1035,7 +1082,7 @@ describe("evolveMatchEnded", () => {
     assertEngineInvariants(result56);
 
     const config28Value = config28();
-    const { state: state28 } = started(config28Value, 0);
+    const state28 = dealtState(config28Value);
     const summary28 = redealSummary(config28Value, 0);
     const result28 = evolve(state28, {
       type: "matchEnded",
@@ -1049,7 +1096,16 @@ describe("evolveMatchEnded", () => {
     assertEngineInvariants(result28);
   });
 
-  it("throws for every match outcome not yet implemented by any unit", () => {
+  it("throws on a redeal with no match in progress", () => {
+    const config = config56();
+    const { state } = started(config, 0);
+    assert.equal(state.phase.type, "awaitingDeal");
+    assert.throws(() =>
+      evolve(state, { type: "matchEnded", summary: redealSummary(config, 0) }),
+    );
+  });
+
+  it("throws for a scored or restarted outcome with no match in progress", () => {
     const config = config56();
     const { state } = started(config, 0);
     const base = {

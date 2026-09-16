@@ -7,11 +7,12 @@ import type {
   AuctionState,
   Contract,
   EngineState,
+  MatchOutcome,
   MatchState,
   MatchSummary,
   RoundPlay,
 } from "./state.js";
-import type { Card, Seat, TokenBalances } from "./types.js";
+import type { Card, EngineConfig, Seat, Team, TokenBalances } from "./types.js";
 
 export type EngineInvariantCode =
   | "invalidConfig"
@@ -27,6 +28,7 @@ export type EngineInvariantCode =
   | "invalidTurn"
   | "invalidPoints"
   | "summaryLeaksHiddenTrump"
+  | "invalidSummary"
   | "invalidAuctionState";
 
 /** Thrown for engine bugs. The message names only the invariant code. */
@@ -50,21 +52,65 @@ function isNonNegativeWholeNumber(value: unknown): boolean {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
-function checkBalances(balances: TokenBalances): void {
+/**
+ * Balances are nonnegative whole numbers, and because tokens only ever move
+ * from one team to the other (design §10.3, §13.2) they always add up to the
+ * two teams' starting tokens.
+ */
+function checkBalances(balances: TokenBalances, startingTokens: number): void {
   check(
     isNonNegativeWholeNumber(balances.A) &&
-      isNonNegativeWholeNumber(balances.B),
+      isNonNegativeWholeNumber(balances.B) &&
+      balances.A + balances.B === 2 * startingTokens,
     "invalidTokens",
   );
+}
+
+function isTeam(value: unknown): value is Team {
+  return value === "A" || value === "B";
+}
+
+function isScoredOutcome(outcome: MatchOutcome): boolean {
+  return outcome.type !== "restarted" && outcome.type !== "redealt";
 }
 
 function cardKey(card: Card): string {
   return `${card.suit}:${card.rank}:${card.copy}`;
 }
 
-function checkSummary(summary: MatchSummary, playerCount: number): void {
+function checkSummary(summary: MatchSummary, config: EngineConfig): void {
+  const { playerCount } = config;
   check(isSeatInRange(summary.dealer, playerCount), "seatOutOfRange");
-  checkBalances(summary.tokens);
+  checkBalances(summary.tokens, config.startingTokens);
+  check(
+    isNonNegativeWholeNumber(summary.points.A) &&
+      isNonNegativeWholeNumber(summary.points.B),
+    "invalidPoints",
+  );
+
+  // design §10.3: only scored outcomes move tokens; restarts and redeals
+  // record none.
+  const { outcome, tokensMoved } = summary;
+  if (isScoredOutcome(outcome)) {
+    check(
+      tokensMoved !== null &&
+        isTeam(tokensMoved.payer) &&
+        isNonNegativeWholeNumber(tokensMoved.amount),
+      "invalidSummary",
+    );
+  } else {
+    check(tokensMoved === null, "invalidSummary");
+  }
+  if (outcome.type === "disqualified") {
+    check(isSeatInRange(outcome.seat, playerCount), "seatOutOfRange");
+  }
+  if (outcome.type === "surrendered" || outcome.type === "awarded") {
+    check(isTeam(outcome.team), "invalidSummary");
+  }
+  if (outcome.type === "redealt" && outcome.reason.type === "lowHand") {
+    check(isSeatInRange(outcome.reason.seat, playerCount), "seatOutOfRange");
+  }
+
   const contract = summary.contract;
   if (contract !== null) {
     check(isSeatInRange(contract.bidder, playerCount), "seatOutOfRange");
@@ -85,6 +131,25 @@ function summaryTokensMatch(
   return (
     summary.tokens.A === state.tokens.A && summary.tokens.B === state.tokens.B
   );
+}
+
+/**
+ * design §10.4: `matchOver`/`sessionOver` show the scored result that was just
+ * appended to `matchLog`, for the current dealer.
+ */
+function checkFinishedMatchSummary(
+  summary: MatchSummary,
+  state: EngineState,
+): void {
+  checkSummary(summary, state.config);
+  check(isScoredOutcome(summary.outcome), "invalidSummary");
+  check(summary.dealer === state.dealer, "invalidSummary");
+  const last = state.matchLog[state.matchLog.length - 1];
+  check(
+    last !== undefined && JSON.stringify(last) === JSON.stringify(summary),
+    "invalidSummary",
+  );
+  check(summaryTokensMatch(summary, state), "invalidTokens");
 }
 
 function checkSeat(seat: Seat | null, playerCount: number): void {
@@ -419,18 +484,41 @@ export function assertEngineInvariants(state: EngineState): void {
 
   check(isSeatInRange(state.dealer, playerCount), "dealerOutOfRange");
 
-  checkBalances(state.tokens);
+  const { startingTokens } = state.config;
+  checkBalances(state.tokens, startingTokens);
 
   for (const summary of state.matchLog) {
-    checkSummary(summary, playerCount);
+    checkSummary(summary, state.config);
   }
   for (const past of state.pastSessions) {
-    checkBalances(past.tokens);
+    // design §10.4: an archived session ended with its loser at 0 tokens.
+    checkBalances(past.tokens, startingTokens);
+    check(
+      isTeam(past.winner) &&
+        past.tokens[past.winner] > 0 &&
+        past.tokens[past.winner === "A" ? "B" : "A"] === 0,
+      "invalidTokens",
+    );
   }
 
   const phase = state.phase;
+  // design §10.4: only a finished session has a team at 0 tokens.
+  check(
+    phase.type === "sessionOver" || (state.tokens.A > 0 && state.tokens.B > 0),
+    "invalidTokens",
+  );
   switch (phase.type) {
     case "awaitingDeal":
+      // design §10.4: a first deal follows a session start or restart, before
+      // any result has been logged or any token has moved.
+      if (phase.reason === "firstDeal") {
+        check(state.matchLog.length === 0, "invalidSummary");
+        check(
+          state.tokens.A === startingTokens &&
+            state.tokens.B === startingTokens,
+          "invalidTokens",
+        );
+      }
       return;
     case "auction":
     case "placingCard":
@@ -439,19 +527,16 @@ export function assertEngineInvariants(state: EngineState): void {
       return;
     case "matchOver":
       // design §10.4: a scored match with no team at 0 tokens.
-      checkSummary(phase.summary, playerCount);
-      check(state.tokens.A > 0 && state.tokens.B > 0, "invalidTokens");
-      check(summaryTokensMatch(phase.summary, state), "invalidTokens");
+      checkFinishedMatchSummary(phase.summary, state);
       return;
     case "sessionOver":
       // design §10.4: a team reached 0 tokens; the other team wins.
-      checkSummary(phase.summary, playerCount);
+      checkFinishedMatchSummary(phase.summary, state);
       check(
         state.tokens[phase.winner] > 0 &&
           state.tokens[phase.winner === "A" ? "B" : "A"] === 0,
         "invalidTokens",
       );
-      check(summaryTokensMatch(phase.summary, state), "invalidTokens");
       return;
     default:
       assertNever(phase, "assertEngineInvariants");

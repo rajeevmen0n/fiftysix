@@ -1,13 +1,7 @@
 import { cardPoints } from "./cards.js";
 import type { RedealtEvent } from "./events.js";
 import { teamOf } from "./seats.js";
-import type {
-  Contract,
-  EngineState,
-  FaceDownCard,
-  RedealReason,
-  SummaryContract,
-} from "./state.js";
+import type { EngineState, FaceDownCard, RedealReason } from "./state.js";
 import type { Card, Team } from "./types.js";
 
 const TEAMS: readonly Team[] = ["A", "B"];
@@ -68,26 +62,6 @@ export function completeHoldings(
       ? [...hand, faceDown.card]
       : [...hand],
   );
-}
-
-/**
- * Design §10.3: the public summary form of a contract. An unrevealed 28
- * trump keeps neither its suit nor its card, so a logged 28 redeal carries
- * only the public first-auction facts.
- */
-export function summaryContract(contract: Contract): SummaryContract {
-  return {
-    bidder: contract.bidder,
-    team: contract.team,
-    amount: contract.amount,
-    trump:
-      contract.trump.type === "hidden"
-        ? { type: "hidden" }
-        : { ...contract.trump },
-    style: contract.style,
-    multiplier: contract.multiplier,
-    forced: contract.forced,
-  };
 }
 
 /**

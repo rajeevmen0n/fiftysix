@@ -392,7 +392,7 @@ export function faceDownIsForced(state: EngineState, seat: Seat): boolean;
 
 ---
 
-### [ ] E006: Implement scoring, host resolutions, and session transitions
+### [x] E006: Implement scoring, host resolutions, and session transitions
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
@@ -420,27 +420,27 @@ export function decideHostAction(state: EngineState, action: EngineAction): Deci
 export function decideSessionAction(state: EngineState, action: EngineAction): Decision;
 ```
 
-- [ ] Calculate win/loss tier stake times multiplier and choose the payer exactly from design
+- [x] Calculate win/loss tier stake times multiplier and choose the payer exactly from design
   §10.3 for made, failed, disqualified, surrendered, and awarded outcomes. Transfer no more than
   the payer owns and record actual movement plus running balances.
-- [ ] Build complete match summaries with dealer, nullable summary contract, points, token
+- [x] Build complete match summaries with dealer, nullable summary contract, points, token
   movement, balances, and the tagged outcome. Before emitting or storing a summary, replace an
   unrevealed 28 trump with `hidden` and retain neither its suit nor card. Append scored outcomes,
   every host restart, and 28 redeals to `matchLog`; do not append 56 automatic redeals. Emit
   `matchEnded` for every result so transient presentation remains possible.
-- [ ] Accept host `endMatch(restart)` during auction, placement, play, or a vote; cancel match
+- [x] Accept host `endMatch(restart)` during auction, placement, play, or a vote; cancel match
   state/vote, move no tokens, log `restarted`, keep dealer, and enter `awaitingDeal(restart)`.
   Accept award only after play starts, including during a vote, and score the named winner.
-- [ ] After a scored match, enter `sessionOver` and emit `sessionEnded` if either team is zero;
+- [x] After a scored match, enter `sessionOver` and emit `sessionEnded` if either team is zero;
   otherwise enter `matchOver`. Implement system `startNextMatch` only from `matchOver`, rotate
   dealer counter-clockwise, emit `nextMatchStarted`, and await a new deal.
-- [ ] Implement system `restartSession(firstDealer)` only from `sessionOver`: archive winner/final
+- [x] Implement system `restartSession(firstDealer)` only from `sessionOver`: archive winner/final
   tokens in `pastSessions`, reset balances/log, validate the supplied dealer, emit
   `sessionRestarted`, and enter `awaitingDeal(firstDeal)`.
-- [ ] Add and run automated tests for every scoring row and multiplier, capped payment, both
+- [x] Add and run automated tests for every scoring row and multiplier, capped payment, both
   session winners, next-dealer rotation, restart during each eligible phase, award availability,
   session archival, invalid system phase, and JSON replay.
-- [ ] Run typecheck, lint, build, invariants, and `git diff --check`; require success. Update
+- [x] Run typecheck, lint, build, invariants, and `git diff --check`; require success. Update
   plan/progress and commit `feat(engine): score matches and sessions`.
 
 ---

@@ -198,7 +198,9 @@ export type ScoredOutcome =
   | { type: "made" }
   | { type: "failed" }
   | { type: "disqualified"; seat: Seat; kind: IllegalPlayKind }
+  /** `team` is the team that SURRENDERED, i.e. the loser of the match. */
   | { type: "surrendered"; team: Team }
+  /** `team` is the team the host AWARDED the match to, i.e. the winner. */
   | { type: "awarded"; team: Team };
 
 export type MatchOutcome =

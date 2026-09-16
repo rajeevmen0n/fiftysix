@@ -76,6 +76,7 @@ export type {
   TrumpRevealedEvent,
 } from "./events.js";
 export { decidePlaceCard, faceDownIsForced } from "./hidden-trump.js";
+export { decideHostAction } from "./host-actions.js";
 export {
   assertEngineInvariants,
   type EngineInvariantCode,
@@ -88,7 +89,9 @@ export type {
   EngineRejection,
   EngineRejectionCode,
 } from "./result.js";
+export { scoreMatch } from "./scoring.js";
 export { assertSeat, isSeatInRange, nextSeat, teamOf } from "./seats.js";
+export { decideSessionAction } from "./session.js";
 export {
   canAffordBid,
   canAffordDouble,

@@ -8,11 +8,59 @@ implementation plans.
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
-| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E005 | Await user approval before E006 |
+| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E006 | Await user approval before E007 |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
+
+E006 — Implement scoring, host resolutions, and session transitions — implementation commit
+`feat(engine): score matches and sessions`.
+
+- Added `scoring.ts` (`scoreMatch`, `matchSummary`, `summaryContract`) and `host-actions.ts`
+  (`decideHostAction`); `session.ts` gained `decideSessionAction` and the `matchEnded`,
+  `sessionEnded`, `nextMatchStarted` and `sessionRestarted` evolvers.
+- Payer selection follows design §10.3 for all five scored outcomes. `outcome.surrendered.team`
+  is the **surrendering (losing)** team; `outcome.awarded.team` is the **winning** team named by
+  the host — opposite polarities on identically shaped variants, now documented in `state.ts` and
+  `events.ts` so E008's surrender producer can't invert one. Stake is the tier's win/loss stake
+  times `contract.multiplier`; `transferTokens` caps a payment at what the payer owns, and the
+  summary records actual movement plus running balances.
+- `matchSummary` is the single construction site for every outcome, and always projects through
+  `summaryContract`, which erases an unrevealed 28 trump to `{type:"hidden"}`. The earlier
+  duplicate summary builders in `deal.ts`/`redeal.ts` were deleted. A `summaryLeaksHiddenTrump`
+  invariant plus tests guard the erasure.
+- `matchLog` gets scored outcomes, every host restart, and 28 redeals; 56 automatic redeals are
+  not appended. `matchEnded` is emitted for every result so transient presentation stays possible.
+- Session flow: scored match → `sessionOver` + `sessionEnded` when either team hits 0, else
+  `matchOver`; `startNextMatch` only from `matchOver` with the dealer rotating counter-clockwise;
+  `restartSession(firstDealer)` only from `sessionOver`, archiving winner and final tokens into
+  `pastSessions` and resetting balances and log.
+- Review (Opus, full diff against the specs) returned **no blocking findings**. Three of its nits
+  were applied: a missing phase guard on the `matchEnded(redealt)` evolver (§13.1 — it was the
+  only branch that could silently rewrite the phase), the team-polarity doc comments above, and
+  phase-mismatch throw tests for the three session evolvers. Fixing the guard exposed an existing
+  test that applied `matchEnded(redealt)` from `awaitingDeal`, an unreachable sequence; it now
+  deals first (56 in one stage, 28 in two) and a companion test pins the throw.
+- Non-blocking nits left for later: `checkFinishedMatchSummary` (`invariants.ts` ~147) compares
+  the phase summary to the last log entry with key-order-sensitive `JSON.stringify`, safe only
+  while both are the same object; the per-action replay assertion in `scoring.test.ts` `run()` is
+  tautological (real replay coverage is the `E006 replay and immutability` block).
+- **E005 carry-overs still open:** `invariants.ts` (~404) doesn't detect an empty face-down slot
+  in `28-second` after a non-pass call, and `deal.ts` (~272) and `invariants.ts` (~367) express
+  the 28 bid limit two different ways.
+- This unit was implemented in a session that was interrupted before review; a later session
+  re-ran verification, obtained the review, applied the nits, and committed.
+- 141 tests (35 new): every payer row × ×1/×2/×4, extra tiers, capped payment, both session
+  winners, hidden-trump erasure, restart in each eligible phase, award availability, dealer
+  rotation for 4/6/8 players, session archival across two sessions, invalid system phase,
+  evolver phase mismatches, invariants, and JSON replay.
+- Verification on 2026-09-15: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (141/141),
+  `git diff --check`, and the zero-dependency manifest check all passed.
+- Next unit: E007, Implement card play, hidden-trump reveal, and disqualification, after user
+  approval.
+
+## Previously completed unit
 
 E005 — Implement 28 auctions, face-down placement, and second deal — implementation commit
 `feat(engine): implement 28 auction flow`.

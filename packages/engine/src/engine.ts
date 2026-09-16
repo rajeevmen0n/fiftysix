@@ -16,13 +16,14 @@ import {
   evolveRedoubled,
 } from "./auction.js";
 import { decideDeal, evolveAuctionStarted, evolveDealt } from "./deal.js";
-import type { EngineEvent, MatchEndedEvent } from "./events.js";
+import type { EngineEvent } from "./events.js";
 import {
   decidePlaceCard,
   evolveCardPlaced,
   evolveFaceDownReturned,
   evolvePlacingCardStarted,
 } from "./hidden-trump.js";
+import { decideHostAction } from "./host-actions.js";
 import { evolveRedealt } from "./redeal.js";
 import {
   type ActionResult,
@@ -32,13 +33,16 @@ import {
   reject,
 } from "./result.js";
 import { isSeatInRange } from "./seats.js";
-import { decideSessionStart, evolveSessionStarted } from "./session.js";
-import type {
-  EnginePhaseType,
-  EngineState,
-  MatchOutcome,
-  MatchSummary,
-} from "./state.js";
+import {
+  decideSessionAction,
+  decideSessionStart,
+  evolveMatchEnded,
+  evolveNextMatchStarted,
+  evolveSessionEnded,
+  evolveSessionRestarted,
+  evolveSessionStarted,
+} from "./session.js";
+import type { EnginePhaseType, EngineState } from "./state.js";
 import type { EngineConfig, Seat } from "./types.js";
 
 // Transition kernel.
@@ -132,10 +136,10 @@ function routeAction(state: EngineState, action: EngineAction): Decision {
     case "voteSurrender":
       return unsupportedAction(state, action);
     case "endMatch":
-      return unsupportedAction(state, action);
+      return decideHostAction(state, action);
     case "startNextMatch":
     case "restartSession":
-      return unsupportedAction(state, action);
+      return decideSessionAction(state, action);
     default:
       return assertNever(action, "decide");
   }
@@ -168,92 +172,6 @@ export function decide(state: EngineState, action: EngineAction): Decision {
 /** Placeholder evolver for events whose rule module is not implemented yet. */
 function missingEvolver(_state: EngineState, event: EngineEvent): never {
   throw new Error(`No evolver is registered for engine event ${event.type}`);
-}
-
-/**
- * Placeholder for a `MatchOutcome` variant no unit has implemented yet.
- * Named after the outcome so a later unit gets a clear compile-time
- * reminder (via the call site's exhaustiveness switch) and a clear runtime
- * message naming exactly which outcome still needs its evolver.
- */
-function outcomeNotYetImplemented(outcomeType: string): never {
-  throw new Error(`Match outcome not yet implemented: ${outcomeType}`);
-}
-
-/**
- * Design §7.1/§10.3: only the automatic `redealt` outcome is reachable via
- * `decide()` so far (56 after the deal, 28 after the second deal — §7.1).
- * A 56 redeal is a transient notice: the phase reset, unchanged dealer and
- * unchanged tokens are all carried by this event, so its summary
- * is not appended to `matchLog`. A 28 redeal is appended because its first
- * auction already occurred; its summary carries the public first-auction
- * facts and zero token movement.
- *
- * Every other `MatchOutcome` (`made`, `failed`, `disqualified`,
- * `surrendered`, `awarded`, `restarted`) belongs to later units (scoring,
- * surrender, host `endMatch`) that also own the `matchOver`/`sessionOver`
- * phase transitions and the paired `sessionEnded` event (design §10.4) — so
- * they throw here rather than being half-implemented ahead of that work.
- * The switch below is exhaustive at the type level (see `assertNever`'s
- * default case): adding a new `MatchOutcome` variant without a case here
- * fails compilation.
- */
-function cloneOutcome(outcome: MatchOutcome): MatchOutcome {
-  return outcome.type === "redealt"
-    ? { type: "redealt", reason: { ...outcome.reason } }
-    : { ...outcome };
-}
-
-function cloneSummary(summary: MatchSummary): MatchSummary {
-  const { contract } = summary;
-  return {
-    dealer: summary.dealer,
-    contract:
-      contract === null ? null : { ...contract, trump: { ...contract.trump } },
-    points: { A: summary.points.A, B: summary.points.B },
-    tokensMoved:
-      summary.tokensMoved === null ? null : { ...summary.tokensMoved },
-    tokens: { A: summary.tokens.A, B: summary.tokens.B },
-    outcome: cloneOutcome(summary.outcome),
-  };
-}
-
-function evolveMatchEnded(
-  state: EngineState,
-  event: MatchEndedEvent,
-): EngineState {
-  const { summary } = event;
-  const { outcome } = summary;
-
-  switch (outcome.type) {
-    case "made":
-    case "failed":
-    case "disqualified":
-    case "surrendered":
-    case "awarded":
-    case "restarted":
-      return outcomeNotYetImplemented(outcome.type);
-    case "redealt": {
-      const tokens = { A: summary.tokens.A, B: summary.tokens.B };
-      // Own the logged summary so a caller mutating the event can't reach
-      // state.
-      const matchLog =
-        state.config.gameType === "28"
-          ? [...state.matchLog, cloneSummary(summary)]
-          : state.matchLog;
-
-      return {
-        config: state.config,
-        tokens,
-        dealer: summary.dealer,
-        matchLog,
-        pastSessions: state.pastSessions,
-        phase: { type: "awaitingDeal", reason: "redeal" },
-      };
-    }
-    default:
-      return assertNever(outcome, "evolveMatchEnded");
-  }
 }
 
 export function evolve(state: EngineState, event: EngineEvent): EngineState {
@@ -291,8 +209,11 @@ export function evolve(state: EngineState, event: EngineEvent): EngineState {
     case "matchEnded":
       return evolveMatchEnded(state, event);
     case "sessionRestarted":
+      return evolveSessionRestarted(state, event);
     case "sessionEnded":
+      return evolveSessionEnded(state, event);
     case "nextMatchStarted":
+      return evolveNextMatchStarted(state, event);
     case "revealAsked":
     case "trumpRevealed":
     case "cardPlayed":

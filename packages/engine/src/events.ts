@@ -24,11 +24,20 @@ export type SessionStartedEvent = {
   firstDealer: Seat;
   tokens: TokenBalances;
 };
+/**
+ * design §10.4: from `sessionOver`. Archives the winner and final tokens,
+ * resets balances to the starting tokens, and clears the match log.
+ */
 export type SessionRestartedEvent = {
   type: "sessionRestarted";
   firstDealer: Seat;
 };
+/**
+ * design §10.4: follows a scored `matchEnded` in the same action when a team
+ * is left with 0 tokens; `winner` is the other team.
+ */
 export type SessionEndedEvent = { type: "sessionEnded"; winner: Team };
+/** design §10.4: from `matchOver`; `dealer` is the new dealer (`dealer + 1`). */
 export type NextMatchStartedEvent = { type: "nextMatchStarted"; dealer: Seat };
 
 export type SessionEvent =
@@ -143,6 +152,7 @@ export type SurrenderVotedEvent = {
   vote: SurrenderVoteChoice;
 };
 export type SurrenderFailedEvent = { type: "surrenderFailed" };
+/** `team` is the team that SURRENDERED, i.e. the loser of the match. */
 export type SurrenderedEvent = { type: "surrendered"; team: Team };
 
 export type SurrenderEvent =
@@ -153,6 +163,11 @@ export type SurrenderEvent =
   | SurrenderedEvent;
 
 // End of match
+/**
+ * design §10.3: emitted for every result — scored, host restart, and
+ * automatic redeal. The summary is canonical: its contract never holds an
+ * unrevealed 28 trump's suit or card.
+ */
 export type MatchEndedEvent = { type: "matchEnded"; summary: MatchSummary };
 
 export type MatchEvent = MatchEndedEvent;
