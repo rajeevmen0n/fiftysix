@@ -384,6 +384,8 @@ and the face-down card stays hidden.
 
   The first time either is true, `surrender.decided` is set and event
   `resultDecided(losingTeam)` is emitted. It stays set for the rest of the match.
+  The check also runs after the final round: event order `roundWon`, `resultDecided`,
+  `matchEnded`. The UI may skip the notice when `matchEnded` follows in the same batch.
 - **`proposeSurrender`**, from any member of the losing team:
   - in `play`, not necessarily on their turn
   - only when `decided` is set, no vote is running, and `lastFailedRound` isn't the current round
@@ -398,6 +400,13 @@ and the face-down card stays hidden.
   - **Fails** when no votes make passing impossible. Event `surrenderFailed`.
     `lastFailedRound` is set to the current round, and play resumes.
 - There's no vote timer. A disconnected voter is a stall, handled by the service.
+- **Rejections**: a losing-team proposal during a vote gets `surrenderVoteRunning`. Every other
+  surrender-specific rejection gets `actionNotAllowed` with a `reason` detail: `surrenderOff`,
+  `resultNotDecided`, `failedThisRound`, `invalidVote`, `noVoteRunning`, `notOnLosingTeam` or
+  `alreadyVoted`. While
+  no vote runs, a winning-team proposal gets `resultNotDecided` whether or not the result is
+  decided, so certainty never leaks to the winning team. During a vote, which is public, it gets
+  `notOnLosingTeam`.
 
 ### 10.2 End match (host)
 - **`endMatch(restart)`**: allowed in `auction`, `placingCard` or `play` (also during a vote).

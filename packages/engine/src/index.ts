@@ -143,6 +143,7 @@ export type {
   TeamPoints,
   TokenMovement,
 } from "./state.js";
+export { decideSurrenderAction, losingTeamIfCertain } from "./surrender.js";
 export type {
   BidStyle,
   BidSuit,

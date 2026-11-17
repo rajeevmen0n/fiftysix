@@ -503,7 +503,7 @@ export function scorePlayedOutMatch(state: EngineState): EngineEvent[];
 
 ---
 
-### [ ] E008: Implement result certainty and surrender voting
+### [x] E008: Implement result certainty and surrender voting
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 

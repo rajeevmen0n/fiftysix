@@ -12,6 +12,7 @@ import type {
   MatchSummary,
   RoundPlay,
 } from "./state.js";
+import { losingTeamIfCertain, surrenderVoteStatus } from "./surrender.js";
 import type { Card, EngineConfig, Seat, Team, TokenBalances } from "./types.js";
 
 export type EngineInvariantCode =
@@ -31,7 +32,8 @@ export type EngineInvariantCode =
   | "invalidSummary"
   | "invalidAuctionState"
   | "invalidRound"
-  | "invalidReveal";
+  | "invalidReveal"
+  | "invalidSurrender";
 
 /** Thrown for engine bugs. The message names only the invariant code. */
 export class EngineInvariantError extends Error {
@@ -306,13 +308,7 @@ function checkMatch(
     checkSeat(current.revealAskedBy, playerCount);
   }
 
-  const vote = match.surrender.vote;
-  if (vote !== null) {
-    checkSeat(vote.proposer, playerCount);
-    for (const seat of [...vote.yes, ...vote.no]) {
-      checkSeat(seat, playerCount);
-    }
-  }
+  checkSurrender(state, match, phase);
 
   check(
     isNonNegativeWholeNumber(match.points.A) &&
@@ -334,6 +330,59 @@ function checkMatch(
   );
 
   checkCardLocations(state, match);
+}
+
+/**
+ * design §10.1: surrender state exists only in play with the option on.
+ * `decided` is exactly the certain losing team: the check runs after every
+ * round and points change only when a round is won, so between actions it
+ * always matches the arithmetic. A running vote belongs to that team, counts
+ * the proposer as yes and each seat once, and is still open (a vote that
+ * passes or fails is settled within the same action). A failed vote's round
+ * is the current round or an earlier one.
+ */
+function checkSurrender(
+  state: EngineState,
+  match: MatchState,
+  phase: "auction" | "placingCard" | "play",
+): void {
+  const { playerCount } = state.config;
+  const { decided, vote, lastFailedRound } = match.surrender;
+  if (vote !== null) {
+    checkSeat(vote.proposer, playerCount);
+    for (const seat of [...vote.yes, ...vote.no]) {
+      checkSeat(seat, playerCount);
+    }
+  }
+
+  if (phase !== "play" || state.config.surrenderOption !== "on") {
+    check(
+      decided === null && vote === null && lastFailedRound === null,
+      "invalidSurrender",
+    );
+    return;
+  }
+
+  check(decided === losingTeamIfCertain(state), "invalidSurrender");
+  if (vote !== null) {
+    const voters = [...vote.yes, ...vote.no];
+    check(
+      decided !== null &&
+        vote.yes.includes(vote.proposer) &&
+        new Set(voters).size === voters.length &&
+        voters.every((seat) => teamOf(seat) === decided) &&
+        surrenderVoteStatus(vote, playerCount) === "open",
+      "invalidSurrender",
+    );
+  }
+  if (lastFailedRound !== null) {
+    check(
+      decided !== null &&
+        isNonNegativeWholeNumber(lastFailedRound) &&
+        lastFailedRound <= match.rounds.length,
+      "invalidSurrender",
+    );
+  }
 }
 
 /**

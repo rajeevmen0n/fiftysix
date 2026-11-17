@@ -18,6 +18,7 @@ import type {
   ScoredOutcome,
   SummaryContract,
 } from "./state.js";
+import { losingTeamIfCertain } from "./surrender.js";
 import { deepFreeze } from "./test-helpers.js";
 import type {
   Card,
@@ -266,8 +267,9 @@ function playing28Hidden(config: EngineConfig = config28()): EngineState {
  * Hand-builds finished rounds on a match in play (card play itself is E007):
  * each round takes the first card of every hand in turn order from its
  * leader, and is won by the next seat in `winners`, who leads the next round.
+ * `buildRounds` doesn't check invariants; `withRounds` does.
  */
-function withRounds(
+function buildRounds(
   state: EngineState,
   winners: readonly number[],
 ): EngineState {
@@ -293,7 +295,7 @@ function withRounds(
     points[teamOf(winner)] += roundPoints;
     leader = winner;
   }
-  const next = withMatch(state, {
+  return withMatch(state, {
     ...match,
     hands,
     rounds,
@@ -307,6 +309,13 @@ function withRounds(
       revealAskedBy: null,
     },
   });
+}
+
+function withRounds(
+  state: EngineState,
+  winners: readonly number[],
+): EngineState {
+  const next = buildRounds(state, winners);
   assertEngineInvariants(next);
   return next;
 }
@@ -318,16 +327,27 @@ function withTokens(state: EngineState, tokens: TokenBalances): EngineState {
 }
 
 function withVote(state: EngineState): EngineState {
-  const match = matchOf(state);
-  const next = withMatch(state, {
+  // Team A takes rounds until the bidding team B can no longer make its bid,
+  // the certainty check records B's loss (design §10.1), and seat 1 proposes.
+  let decided = state;
+  for (let rounds = 1; losingTeamIfCertain(decided) === null; rounds += 1) {
+    decided = buildRounds(state, Array(rounds).fill(0));
+  }
+  assert.equal(losingTeamIfCertain(decided), "B");
+  const match = matchOf(decided);
+  const ready = withMatch(decided, {
     ...match,
-    surrender: {
-      decided: "B",
-      vote: { proposer: 1, yes: [1], no: [] },
-      lastFailedRound: null,
-    },
+    surrender: { decided: "B", vote: null, lastFailedRound: null },
   });
-  assertEngineInvariants(next);
+  assertEngineInvariants(ready);
+  const next = run(ready, [
+    { type: "proposeSurrender", source: seat(1) },
+  ]).state;
+  assert.deepEqual(matchOf(next).surrender.vote, {
+    proposer: 1,
+    yes: [1],
+    no: [],
+  });
   return next;
 }
 

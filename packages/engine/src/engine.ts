@@ -51,6 +51,14 @@ import {
   evolveSessionStarted,
 } from "./session.js";
 import type { EnginePhaseType, EngineState } from "./state.js";
+import {
+  decideSurrenderAction,
+  evolveResultDecided,
+  evolveSurrendered,
+  evolveSurrenderFailed,
+  evolveSurrenderProposed,
+  evolveSurrenderVoted,
+} from "./surrender.js";
 import type { EngineConfig, Seat } from "./types.js";
 
 // Transition kernel.
@@ -59,11 +67,11 @@ import type { EngineConfig, Seat } from "./types.js";
 // then routes to one pure rule-module decider. `evolve` routes each event to
 // one pure evolver and performs no policy checks. `act` composes the two.
 //
-// Rule modules plug in by replacing the placeholder in the matching `case` of
-// `routeAction` / `evolve` with their own function. Deciders receive state they
-// must not mutate, and must copy any action payload they place in events so no
-// caller-owned object is retained. Evolvers must return new objects rather
-// than mutating the input state or event.
+// Each rule module plugs in through the matching `case` of `routeAction` /
+// `evolve`. Deciders receive state they must not mutate, and must copy any
+// action payload they place in events so no caller-owned object is retained.
+// Evolvers must return new objects rather than mutating the input state or
+// event.
 
 /** Phases in which each action can ever be accepted (design §7–§10). */
 const ACTION_PHASES: Readonly<
@@ -118,14 +126,6 @@ function checkSource(
   return null;
 }
 
-/** Placeholder decider for actions whose rule module is not implemented yet. */
-function unsupportedAction(
-  _state: EngineState,
-  action: EngineAction,
-): Decision {
-  return reject("actionNotAllowed", { action: action.type });
-}
-
 function routeAction(state: EngineState, action: EngineAction): Decision {
   switch (action.type) {
     case "deal":
@@ -142,7 +142,7 @@ function routeAction(state: EngineState, action: EngineAction): Decision {
       return decidePlayAction(state, action);
     case "proposeSurrender":
     case "voteSurrender":
-      return unsupportedAction(state, action);
+      return decideSurrenderAction(state, action);
     case "endMatch":
       return decideHostAction(state, action);
     case "startNextMatch":
@@ -175,11 +175,6 @@ export function decide(state: EngineState, action: EngineAction): Decision {
   }
 
   return routeAction(state, action);
-}
-
-/** Placeholder evolver for events whose rule module is not implemented yet. */
-function missingEvolver(_state: EngineState, event: EngineEvent): never {
-  throw new Error(`No evolver is registered for engine event ${event.type}`);
 }
 
 export function evolve(state: EngineState, event: EngineEvent): EngineState {
@@ -233,11 +228,15 @@ export function evolve(state: EngineState, event: EngineEvent): EngineState {
     case "disqualified":
       return evolveDisqualified(state, event);
     case "resultDecided":
+      return evolveResultDecided(state, event);
     case "surrenderProposed":
+      return evolveSurrenderProposed(state, event);
     case "surrenderVoted":
+      return evolveSurrenderVoted(state, event);
     case "surrenderFailed":
+      return evolveSurrenderFailed(state, event);
     case "surrendered":
-      return missingEvolver(state, event);
+      return evolveSurrendered(state, event);
     default:
       return assertNever(event, "evolve");
   }

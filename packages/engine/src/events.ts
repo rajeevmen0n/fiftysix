@@ -166,16 +166,33 @@ export type PlayEvent =
   | RoundWonEvent
   | DisqualifiedEvent;
 
-// Surrender
+// Surrender (design §10.1)
+/**
+ * Surrender option on only: the round just won (the `roundWon` before it)
+ * first made the result certain. Emitted once per match, also after the last
+ * round before its `matchEnded`. Redacted to the losing team's seats.
+ */
 export type ResultDecidedEvent = { type: "resultDecided"; losingTeam: Team };
+/** A losing-team seat opened a vote, counting as yes; play pauses. */
 export type SurrenderProposedEvent = { type: "surrenderProposed"; seat: Seat };
+/**
+ * One more losing-team vote. Followed in the same action by `surrendered`
+ * when the vote passes, or `surrenderFailed` when it can no longer pass.
+ */
 export type SurrenderVotedEvent = {
   type: "surrenderVoted";
   seat: Seat;
   vote: SurrenderVoteChoice;
 };
+/**
+ * The vote ended without passing; play resumes, and no new proposal is
+ * allowed until the next round.
+ */
 export type SurrenderFailedEvent = { type: "surrenderFailed" };
-/** `team` is the team that SURRENDERED, i.e. the loser of the match. */
+/**
+ * `team` is the team that SURRENDERED, i.e. the loser of the match. Followed
+ * by `matchEnded(surrendered)` and possibly `sessionEnded`.
+ */
 export type SurrenderedEvent = { type: "surrendered"; team: Team };
 
 export type SurrenderEvent =

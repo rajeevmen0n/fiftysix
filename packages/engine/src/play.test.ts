@@ -1052,28 +1052,10 @@ describe("play: whole matches", () => {
 });
 
 describe("play: rejections and direct calls", () => {
-  it("rejects plays during a surrender vote, unknown cards, and calls outside play", () => {
+  // Plays during a surrender vote are covered with real votes in
+  // surrender.test.ts.
+  it("rejects unknown cards and calls outside play", () => {
     const flow = playing56();
-    const match = matchOf(flow.state);
-    const voting = withMatch(flow.state, {
-      ...match,
-      surrender: {
-        decided: "A",
-        vote: { proposer: 0, yes: [0], no: [] },
-        lastFailedRound: null,
-      },
-    });
-    assertEngineInvariants(voting);
-    assert.deepEqual(rejection(voting, play(1, "HJ")), {
-      code: "surrenderVoteRunning",
-      details: {},
-    });
-    assert.deepEqual(rejection(voting, ask(1)), {
-      code: "surrenderVoteRunning",
-      details: {},
-    });
-    assert.deepEqual(legalCards(voting, 1), []);
-
     assert.deepEqual(rejection(flow.state, play(1, "SJ'")), {
       code: "cardNotInHand",
       details: {},

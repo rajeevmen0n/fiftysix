@@ -27,6 +27,7 @@ import type {
   IllegalPlayKind,
   MatchState,
 } from "./state.js";
+import { evolveResultDecided, resultCertaintyEvents } from "./surrender.js";
 import type { Card, Seat, Suit } from "./types.js";
 
 // Card play (design §9, rules §6, §8, §10.3): following suit, the trump-lead
@@ -214,6 +215,9 @@ function applyPlayEvents(
       case "disqualified":
         next = evolveDisqualified(next, event);
         break;
+      case "resultDecided":
+        next = evolveResultDecided(next, event);
+        break;
       default:
         throw new Error(`applyPlayEvents: unexpected ${event.type} event`);
     }
@@ -247,7 +251,8 @@ function disqualify(
 
 /**
  * design §9.6: after a legal play, completes the round on its last card
- * (`roundWon`), and scores the match after its last round (made/failed).
+ * (`roundWon`), runs the surrender certainty check (`resultDecided`, design
+ * §10.1), and scores the match after its last round (made/failed).
  */
 function completePlay(state: EngineState, events: EngineEvent[]): Decision {
   let next = applyPlayEvents(state, events);
@@ -269,13 +274,15 @@ function completePlay(state: EngineState, events: EngineEvent[]): Decision {
     points: roundPoints(round),
   };
   next = applyPlayEvents(next, [roundWon]);
-  // The surrender certainty check (design §10.1) belongs here, after
-  // `roundWon`; it is added with the surrender module.
+  // design §9.6, §10.1: the certainty check runs after every round,
+  // including the last, before that round's scoring.
+  const decided = resultCertaintyEvents(next);
+  next = applyPlayEvents(next, decided);
   const finished = playContext(next) === null;
   return accept(
     finished
-      ? [...events, roundWon, ...scorePlayedOutMatch(next)]
-      : [...events, roundWon],
+      ? [...events, roundWon, ...decided, ...scorePlayedOutMatch(next)]
+      : [...events, roundWon, ...decided],
   );
 }
 
@@ -369,8 +376,10 @@ function decideAskReveal(
  * accepted, then scored at once, in Auto-stop.
  *
  * Event orders:
- * - play: `cardPlayed`; on the round's last card `roundWon`; after the last
- *   round `matchEnded` (made or failed) and possibly `sessionEnded`.
+ * - play: `cardPlayed`; on the round's last card `roundWon`, then
+ *   `resultDecided` when that round first makes the result certain with the
+ *   surrender option on; after the last round `matchEnded` (made or failed)
+ *   and possibly `sessionEnded`.
  * - forced face-down play: `trumpRevealed`, `cardPlayed(fromFaceDown)`, then
  *   as above.
  * - reveal: `revealAsked`, `trumpRevealed`.
