@@ -1,19 +1,19 @@
 import { z } from "zod";
 
-const maximumHelloTokenLength = 4_096;
+import { accessTokenSchema } from "./rooms/model.js";
 
+/** The first message on every connection (rooms spec §7.2). */
 export interface HelloMessage {
   type: "hello";
   token: string;
 }
 
-export const helloMessageSchema: z.ZodType<HelloMessage> = z
-  .object({
-    type: z.literal("hello"),
-    token: z.string().min(1).max(maximumHelloTokenLength),
-  })
-  .strict();
+export const helloMessageSchema = z.strictObject({
+  type: z.literal("hello"),
+  token: accessTokenSchema,
+}) satisfies z.ZodType<HelloMessage>;
 
+/** Connection- and protocol-level failures (rooms spec §7.3). */
 export type ProtocolErrorCode =
   | "hello_required"
   | "invalid_message"
@@ -26,22 +26,13 @@ export interface ProtocolErrorMessage {
   code: ProtocolErrorCode;
 }
 
-const protocolErrorMessageSchema: z.ZodType<ProtocolErrorMessage> = z
-  .object({
-    type: z.literal("error"),
-    code: z.enum([
-      "hello_required",
-      "invalid_message",
-      "message_too_large",
-      "origin_not_allowed",
-      "invalid_token",
-    ]),
-  })
-  .strict();
-
-export const clientMessageSchema: z.ZodType<HelloMessage> = helloMessageSchema;
-export const serverMessageSchema: z.ZodType<ProtocolErrorMessage> =
-  protocolErrorMessageSchema;
-
-export type ClientMessage = HelloMessage;
-export type ServerMessage = ProtocolErrorMessage;
+export const protocolErrorMessageSchema = z.strictObject({
+  type: z.literal("error"),
+  code: z.enum([
+    "hello_required",
+    "invalid_message",
+    "message_too_large",
+    "origin_not_allowed",
+    "invalid_token",
+  ]),
+}) satisfies z.ZodType<ProtocolErrorMessage>;

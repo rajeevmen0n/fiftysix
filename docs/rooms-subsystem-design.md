@@ -95,6 +95,10 @@ user-perceived characters after normalization. The network schema first applies 
 count. Names reject NUL, ASCII control characters, and Unicode line/paragraph separators while
 preserving ordinary script joiners. The normalized name is unique within a room.
 
+Because a name is single-line, the network schema rejects every Unicode control character
+(`\p{Cc}`, including C1 controls such as NEL) and ill-formed UTF-16 such as a lone surrogate
+(provisional — pending user confirmation).
+
 A new identity always enters unseated, including a new replacement joining during a stalled
 match. It chooses an empty seat after joining. Until seated, it receives public room information
 but no hand.
@@ -359,6 +363,9 @@ authenticated source seat; clients cannot claim another source.
 Views and events are personalized before serialization. The message envelope is shared across
 player and Table principals, but their view types and capabilities differ.
 
+`allowedRoomActions` and `allowedHostActions` travel inside `view`, as the rooms plan's
+`RoomView` defines, rather than beside it (provisional — pending user confirmation).
+
 ### 7.4 Idempotency
 
 Clients generate a random command ID and retain it until accepted or rejected. If a response is
@@ -399,6 +406,10 @@ a hand, hidden trump or player-only action. Its separately authorized scope dete
 
 Room events cover identity join/leave, seat changes, readiness, presence, stalls, host changes,
 access revocation and expiry. Engine events are those in the engine spec.
+
+Access revocation and expiry reach the affected sockets only as the terminal `accessRevoked`
+message; other recipients see an intentional departure or removal as the room event
+`playerLeft {left | removed}` (provisional — pending user confirmation).
 
 The journal stores canonical internal events. Immediately before delivery, the service calls the
 appropriate room and engine redactors for each recipient. PIN material, token material, other
@@ -441,6 +452,9 @@ Stable room rejection codes include:
 - `not_host`, `player_not_removable`, `invalid_host_target`
 - `match_stalled`, `action_not_allowed`, `reaction_rate_limited`, `request_too_large`
 - `room_code_generation_failed`
+
+HTTP responses additionally use `room_not_found` (404, unknown room code) and `invalid_request`
+(400, a body or settings that fail validation) (provisional — pending user confirmation).
 
 Engine rejection codes pass through unchanged inside the protocol's engine-rejection variant.
 Responses do not reveal whether a different identity's PIN exists or any private engine state.

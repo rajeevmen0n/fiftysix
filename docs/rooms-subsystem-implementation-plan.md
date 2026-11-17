@@ -98,7 +98,7 @@ of creating a duplicate.
 
 ---
 
-### [ ] R001: Define the complete rooms protocol
+### [x] R001: Define the complete rooms protocol
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
@@ -140,34 +140,51 @@ export type RoomCommand =
   | {type: "restartSession"}
   | {type: "leaveRoom"};
 
+export type RoomPhase = "arranging" | "running";
 export interface RoomView {
   roomCode: RoomCode;
   revision: number;
   phase: RoomPhase;
-  players: PublicPlayer[];
+  settings: RoomSettings;          // spec §8.1: fixed settings (no Table PIN)
+  hostId: PlayerId | null;         // null only while host selection is pending
   firstDealer: number;
-  viewer: {type: "player"; playerId: PlayerId; seat: number | null} | {type: "table"};
+  gate: RoomGate;                  // readiness gate or stall status (spec §8.1)
+  players: PublicPlayer[];         // join order
+  seats: PublicSeat[];             // every numbered seat with its team
+  viewer:
+    | {type: "player"; playerId: PlayerId; seat: number | null; lastSeat: number | null}
+    | {type: "table"};
   engine: EngineView | null;
   allowedRoomActions: AllowedRoomAction[];
   allowedHostActions: AllowedHostAction[];
 }
 ```
 
-- [ ] Define public IDs, room phases, settings, `PublicPlayer`, capabilities, room events, and
+Implementation notes (R001): `settings`, `hostId`, `gate`, `seats`, and `viewer.lastSeat` were
+added to cover rooms spec §8.1. Messages carry the capability lists inside `view` rather than
+beside it. A room's commands are parsed with `roomCommandSchemas[gameType]` /
+`clientMessageSchemas[gameType]`, whose 28 variant rejects a bid `suit` or `style` (engine spec
+§8.2); `roomCommandSchema` is the game-independent `RoomCommand` shape. `CreateRoomRequest` is
+the wire body (advanced settings optional); R010's directory consumes the parsed
+`ParsedCreateRoomRequest` with defaults applied. Player and command IDs are 1–64 characters of
+`[A-Za-z0-9_-]`, so R002/R006 must generate player IDs in that alphabet. Protocol tests live in
+`packages/protocol/src/rooms/*.test.ts`.
+
+- [x] Define public IDs, room phases, settings, `PublicPlayer`, capabilities, room events, and
   recipient-safe views. Keep credentials and private state out.
-- [ ] Define `RoomCommand` and its Zod discriminated union. Reproduce the engine's client-action
+- [x] Define `RoomCommand` and its Zod discriminated union. Reproduce the engine's client-action
   schema in protocol with the source seat omitted, constrain it with
   `satisfies z.ZodType<ClientEngineAction>`, and import engine types only.
-- [ ] Define HTTP schemas for create/join/Table access. Require basic settings, default advanced
+- [x] Define HTTP schemas for create/join/Table access. Require basic settings, default advanced
   settings from `design.md`, names with a 1,024-byte UTF-8 encoded-length bound, setting integers
   within their documented caps, and PINs as exactly four ASCII digits. Reject name control and
   line/paragraph-separator characters before service entry.
-- [ ] Define WebSocket schemas for `hello`, `command`, `helloAccepted`, `update`,
+- [x] Define WebSocket schemas for `hello`, `command`, `helloAccepted`, `update`,
   `commandRejected`, `error`, and `accessRevoked`; include every stable rejection from rooms spec
   §10, including reaction throttling and oversized requests.
-- [ ] Export the protocol surface, run `nix develop -c pnpm typecheck` and
+- [x] Export the protocol surface, run `nix develop -c pnpm typecheck` and
   `nix develop -c pnpm lint`, and expect both exit 0.
-- [ ] Review `git diff --check`; update plan/progress and commit
+- [x] Review `git diff --check`; update plan/progress and commit
   `feat(protocol): define rooms protocol`.
 
 ---
@@ -447,9 +464,10 @@ export function redactRoomEvents(
 
 - [ ] Return exact currently legal seat/player targets for room and host capabilities, including
   arranging, between-match, stall, replacement, and authorized Table cases.
-- [ ] Give a seated player only its seat-scoped engine view. Give an active unseated replacement
-  the Table/public engine view and other unseated identities no engine view. Always use engine
-  viewer `table` for a Table principal.
+- [ ] Give a seated player only its seat-scoped engine view. Whenever an engine exists, give every
+  unseated identity the Table/public engine view (including the session log and past sessions,
+  never a hand); `engine` is null only before the first session starts (rooms spec §3.1, §8.1;
+  design.md §11). Always use engine viewer `table` for a Table principal.
 - [ ] Redact nested engine events with engine `redactEvent`, remove null results while retaining
   order, and ensure public room events contain no credential/private-state fields.
 - [ ] Run typecheck and lint; expect exit 0. Inspect generated view types for absence of
@@ -583,7 +601,7 @@ export type AuthenticatedPlayer = AuthenticatedPrincipal & {
 
 ```ts
 export class RoomDirectory {
-  create(input: CreateRoomRequest): Promise<CreateRoomResponse>;
+  create(input: ParsedCreateRoomRequest): Promise<CreateRoomResponse>;
   expire(now: number): Promise<RoomId[]>;
 }
 // POST /api/rooms

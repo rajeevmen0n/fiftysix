@@ -192,5 +192,3 @@ export {
   type ViewSettings,
   view,
 } from "./views.js";
-
-export type EngineBoundary = never;

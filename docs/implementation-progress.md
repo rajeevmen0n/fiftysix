@@ -9,10 +9,61 @@ implementation plans.
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Complete | E010 | Complete |
-| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Ready | R001 | Execute R001 |
+| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | In progress | R001 | Execute R002 |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
+## Pending user confirmations
+
+Decisions made while the user asked not to be interrupted (session of 2026-11-17). Each is
+recorded in the docs; confirm or change them:
+
+1. Rooms spec §10 (provisional): HTTP-only codes `room_not_found` (404) and `invalid_request` (400).
+2. Rooms spec §3.1 (provisional): names reject every `\p{Cc}` (incl. C1 such as NEL) and
+   ill-formed UTF-16 — stricter than design §9's literal list.
+3. Rooms spec §7.3 (provisional): capability lists travel inside `view` (as the plan's `RoomView`).
+4. Rooms spec §8.3 (provisional): revocation/expiry delivered only by terminal `accessRevoked`;
+   bystanders see `playerLeft {left|removed}`.
+5. Rooms plan R007 bullet changed: unseated identities get the public `{type:"table"}` engine view
+   (session log, past sessions) whenever an engine exists, instead of "no engine view" (rooms spec
+   §3.1/§8.1, design §11).
+6. Optional (from E009): keep a public "revealed card" marker after a 28 reveal until it is played?
+   Current behaviour: no (reviewer recommendation).
+7. Open for R005: when the host-transfer wait elapses with nobody connected, is `hostId` the old
+   disconnected host or `null` while the transfer is pending (rooms spec §5.3/§11)?
+
 ## Last completed unit
+
+R001 — Define the complete rooms protocol — commit `feat(protocol): define rooms protocol`.
+
+- Added `packages/protocol/src/rooms/` (`model`, `commands`, `events`, `views`, `http`,
+  `messages`, `index`) with tests (`commands`, `http`, `messages`, `type-assertions`) and
+  `tsconfig.test.json`. Removed the `EngineBoundary`/`ProtocolBoundary` placeholders; protocol
+  re-exports engine types (type-only) so web never imports the engine.
+- HTTP: create/join/Table endpoints returning `{roomCode, token}`; errors `{code}`. WebSocket:
+  `hello`, `command {commandId, command}` (12 room commands); `helloAccepted`, `update`,
+  `commandRejected {source: room|engine}`, `error`, `accessRevoked`. Room event names, `RoomGate`,
+  `hostChanged` reasons, and allowed room/host action shapes were chosen (spec gives categories).
+- All objects strict in both directions, so outbound parse rejects leaked fields; rejection
+  details are flat primitives only (engine `invalidConfig {issues}` must never be forwarded over
+  WebSocket — R007/R008 drop or flatten it). 28 commands parsed per game (`roomCommandSchemas[gameType]`)
+  and reject `suit`/`style` (incl. `null`). Settings: per-field caps and redeal cap in protocol;
+  deck divisibility and tier shape left to engine `validateConfig` (R010 consumes
+  `ParsedCreateRoomRequest`). Player/command IDs are `[A-Za-z0-9_-]{1,64}` (R002/R006 must generate
+  in that alphabet).
+- Exact type-equality assertions (run under `pnpm typecheck`) tie schemas to engine and room types
+  for both games; a real-engine test parses every view, redacted event, offered action, and
+  random-probe rejection through the message envelopes.
+- Note for R008/R009: `message.revision === view.revision` is enforced, so a duplicate `commandId`
+  replay must answer with the current revision and view.
+- One Opus implementer and one Opus reviewer; one correction round (one blocking comment that
+  contradicted the spec, plan R010 signature, primitive rejection details, 28 type checks,
+  AGENTS.md test line, provisional spec notes); reviewer approved. `pnpm-lock.yaml` unchanged.
+- 274 tests (engine 235, protocol 39 new).
+- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (274/274),
+  and `git diff --check` passed.
+- Next unit: R002, Implement the pure room aggregate and seating/readiness policy.
+
+## Previously completed unit
 
 E010 — Verify the complete engine and hand off to rooms — commit `docs: complete game engine`.
 **The pure engine track is complete.**
@@ -47,40 +98,6 @@ E010 — Verify the complete engine and hand off to rooms — commit `docs: comp
   `git diff --check`, and the zero-dependency manifest check passed. `nix build`/`nix flake check`
   were not run (user runs Nix builds).
 - Next unit: R001 (rooms subsystem).
-
-## Previously completed unit
-
-E009 — Implement capabilities, views, and event redaction — implementation commit
-`feat(engine): expose safe views and actions`.
-
-- Added `views.ts` (`view`, `redactEvent`, allowed actions, `allowedHostActions`) and
-  `views.test.ts`; `index.ts` exports the functions and view/redacted-event types. Interfaces
-  match plan E009.
-- Views: public data for everyone (Table view gets nothing private); a seat adds its own hand,
-  face-down card, `allowedActions`, and `resultDecided` only when its team is the certain loser.
-  Unrevealed 28 trump is `{type:"hidden", suit}` with `suit` only for the bidder. Round history
-  (none/last/full) and live points follow settings. No host or debug viewer: the service adds
-  `allowedHostActions`; /debug reads full state.
-- `faceDown` is null after the reveal (settled by rules §10.3, spec §9.3/§11.2/§11.3: the card is
-  shown once via the public `trumpRevealed` event, then is an ordinary hand card). **Optional
-  user question:** keep a public "revealed card" marker until it is played (needs a new state
-  field and spec §6.3/§11.3 edits). Reviewer recommends no.
-- Redaction is stateless: `dealt` → own hand + card counts (never `undealt`); `cardPlaced`/
-  `faceDownReturned` card only to owner; `auctionEnded` hidden suit only to bidder; `roundWon`
-  points null without live points; `resultDecided` → `null` for non-losing viewers; `matchEnded`
-  summary rebuilt from public fields. Caller must pass a seat valid for the event's table.
-- Allowed actions duplicate `decide`'s conditions by hand; a seeded exploration test (6 configs ×
-  2 seeds × 200 actions, ~5.4s) checks capabilities ↔ `decide` both ways for every seat, leak
-  checks for every viewer, and coverage of every phase/event/capability/disqualification kind.
-  E010's matrix should keep this agreement check.
-- Rooms notes: deliver redacted events only to the current occupant at delivery time, never
-  replay pre-occupancy per-seat events (rooms spec §7.3/§8.3); unseated viewers are `{type:"table"}`.
-- One Opus implementer and one Opus reviewer; one correction round (vacuous assertion, comment,
-  test runtime 18s → 6s, order-independent coverage test, doc comment); reviewer approved.
-- 220 tests (22 new).
-- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (220/220),
-  `git diff --check`, and the zero-dependency manifest check all passed.
-- Next unit: E010, Verify the complete engine and hand off to rooms.
 
 ## Implementation readiness
 
