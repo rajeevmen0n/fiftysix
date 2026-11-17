@@ -88,6 +88,7 @@ describe("setReady", () => {
     const resumed = acceptedState(setReady(seated, "n", true));
     assert.deepEqual(resumed.events, [
       { type: "readyChanged", playerId: "n", ready: true },
+      { type: "matchResumed" },
     ]);
     assert.equal(resumed.players[3]?.replacementReady, true);
     assert.deepEqual(readinessGate(resumed), { type: "playing" });

@@ -9,7 +9,7 @@ implementation plans.
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Complete | E010 | Complete |
-| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | In progress | R003 | Implement presence, replacement, and host succession policy |
+| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | In progress | R003 | Review R003 (implemented, unreviewed), then commit |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Pending user confirmations
@@ -28,11 +28,41 @@ recorded in the docs; confirm or change them:
    §3.1/§8.1, design §11).
 6. Optional (from E009): keep a public "revealed card" marker after a 28 reveal until it is played?
    Current behaviour: no (reviewer recommendation).
-7. Open for R005: when the host-transfer wait elapses with nobody connected, is `hostId` the old
-   disconnected host or `null` while the transfer is pending (rooms spec §5.3/§11)?
+7. R003 (unreviewed): resolved from the docs as `hostId = null` when the transfer wait elapses with
+   nobody connected (RoomView/`hostChanged` comments, rooms spec §11). Confirm.
 8. Rooms spec §3.1 (provisional, R002): names reject bidi embedding/override/isolate controls
    (U+202A–202E, U+2066–2069) and must contain at least one visible character; ZWJ/ZWNJ kept.
    Still accepted: U+2800 (Braille blank) and LRM/RLM/ALM marks.
+9. Rooms spec §5.3 (provisional, R003): a null host role filled on connect is reported as
+   `hostChanged` reason `waitElapsed`, even when the null came from the host leaving.
+10. Rooms spec §5.3 (provisional, R003): a host reconnecting at/after its deadline, before the
+    timer fires, does not cancel the transfer; it keeps the role only if no other player is connected.
+11. Rooms spec §5.3 (provisional, R003): handing the host role to a disconnected seated player is
+    allowed and starts that player's transfer wait.
+12. Rooms spec §3.4 (provisional, R003): a host player cannot remove itself (must Leave room); a
+    Table view with host controls may remove the host player.
+
+## Blocked / in-progress unit
+
+R003 — Implement presence, replacement, and host succession policy — **implemented but not yet
+reviewed**. The user stopped the session (usage limit) during review; the work is committed as
+`wip(server): add presence and host succession policy (unreviewed)` so nothing is lost.
+
+- State: `apps/server/src/rooms/presence.ts`, `host.ts` and tests added; `invariants.ts`,
+  `readiness.ts` (`stallChangeEvents`; `setReady` emits `matchResumed` when a replacement
+  completes the table), fixtures, rooms spec §3.4/§5.3 and plan R003/R009/R010/R012 notes edited.
+  `leaveRoom`, `removePlayer`, `transferHost` take `now`; added `hostTransferDeadline`,
+  `stallChangeEvents`, `assertRoomTransition`.
+- Notes for later units (from the implementer): R010's initial snapshot must set `emptySince`;
+  a disconnected host with no pending transfer (e.g. the creator never connects) is left to
+  R010/R012 to start a deadline.
+- At commit time: `pnpm typecheck`, `pnpm lint`, `pnpm test` (375/375: engine 235, protocol 39,
+  server 101) and `git diff --check` passed; `pnpm build` not rerun. Plan checkbox left open.
+- **Smallest next action:** in a new session, dispatch one Opus/Sol reviewer over
+  `git show <wip commit>` against rooms spec §§3–5, §9, §11 and plan R003 (reviewing the 10
+  decision points above plus counter-clockwise succession, transfer-wait units, stall semantics,
+  invariants); dispatch one Opus/Sol implementer for any corrections; then rerun verification,
+  tick R003, and commit `feat(server): add presence and host succession policy`.
 
 ## Last completed unit
 

@@ -148,6 +148,14 @@ Before a session and between matches, the host may remove any identity. During a
 the host may remove only a disconnected player while the match is stalled. Removal uses the same
 cleanup as intentional departure.
 
+Outside an active match, a departing seated identity vacates a seat, which is a seat change and
+clears everyone's Ready (design.md §3); an unseated identity's departure changes no seat. During
+an active match the other players' confirmations are kept (§4.4).
+
+A host player cannot remove itself with Remove player and uses Leave room instead; a Table view
+with host controls may remove the host player like any other identity, which transfers the role
+immediately (§5.3) (provisional — pending user confirmation).
+
 If an identity disappears during an active match, the seat-owned hand, team and position remain
 in the engine. A new identity joins unseated, chooses that empty seat and inherits its state.
 
@@ -265,6 +273,17 @@ also hand the role to any seated player.
 
 Timer callbacks carry the expected host ID and deadline. A callback that became stale because of
 rejoin, manual transfer or another transition is a no-op.
+
+When the wait elapses, or the host leaves or is removed, while no other player is connected,
+`hostId` becomes null and `hostChanged` reports a null host: selection is explicitly pending
+(§11). The next player identity to connect, the former host included, receives the role; that
+completion is reported as `hostChanged` with reason `waitElapsed`. A host that reconnects at or
+after its committed deadline, before the timer callback runs, does not cancel the transfer: the
+reconnect completes it, and the host keeps the role only when no other player is connected
+(provisional — pending user confirmation).
+
+Handing the role to a seated player who is disconnected starts that player's transfer wait at
+the handover, as if it had just disconnected as host (provisional — pending user confirmation).
 
 ## 6. Persistence and runtime model
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-// The room aggregate is pure (rooms spec §2.3, plan R002): its production
+// The room aggregate is pure (rooms spec §2.3, plans R002–R003): its production
 // modules import only the engine, the protocol and each other, and never
 // read ambient time or randomness.
 
@@ -13,6 +13,8 @@ const pureModules = [
   "invariants.ts",
   "seating.ts",
   "readiness.ts",
+  "presence.ts",
+  "host.ts",
   "index.ts",
 ];
 

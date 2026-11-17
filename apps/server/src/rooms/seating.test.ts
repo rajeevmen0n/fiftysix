@@ -220,7 +220,9 @@ describe("hostMovePlayer", () => {
       rejectedCode(hostMovePlayer(state, lockedTable, "b", 0)),
       "not_host",
     );
-    const pending = deepFreeze(room({ players: [{ id: "a" }], hostId: null }));
+    const pending = deepFreeze(
+      room({ players: [{ id: "a", connected: false }], hostId: null }),
+    );
     assert.equal(
       rejectedCode(hostMovePlayer(pending, host, "a", 0)),
       "not_host",

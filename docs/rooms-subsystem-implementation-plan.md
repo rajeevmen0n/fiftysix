@@ -312,12 +312,37 @@ during the active match and implies `ready`. Every Ready flag must be cleared wh
 ```ts
 export function connectPlayer(state: RoomSnapshot, playerId: PlayerId, now: number): DomainResult;
 export function disconnectPlayer(state: RoomSnapshot, playerId: PlayerId, now: number): DomainResult;
-export function leaveRoom(state: RoomSnapshot, playerId: PlayerId): DomainResult;
-export function removePlayer(state: RoomSnapshot, actor: PrincipalScope, target: PlayerId): DomainResult;
+export function leaveRoom(state: RoomSnapshot, playerId: PlayerId, now: number): DomainResult;
+export function removePlayer(
+  state: RoomSnapshot, actor: PrincipalScope, target: PlayerId, now: number,
+): DomainResult;
 export function chooseSuccessor(state: RoomSnapshot, formerHost: PlayerRecord): PlayerId | null;
-export function transferHost(state: RoomSnapshot, actor: PrincipalScope, target: PlayerId): DomainResult;
+export function transferHost(
+  state: RoomSnapshot, actor: PrincipalScope, target: PlayerId, now: number,
+): DomainResult;
 export function applyHostDeadline(state: RoomSnapshot, hostId: PlayerId, deadline: number): DomainResult;
+export function hostTransferDeadline(state: RoomSnapshot, from: number): number;
+export function stallChangeEvents(before: RoomSnapshot, after: RoomSnapshot): CanonicalRoomEvent[];
+export function assertRoomTransition(before: RoomSnapshot, after: RoomSnapshot): void; // throws RoomInvariantError
 ```
+
+Implementation notes (R003): `leaveRoom`, `removePlayer` and `transferHost` take `now`: a
+departure can end the last player connection (`emptySince`), and a handover to a disconnected
+seated player starts its transfer wait. Presence: a connected identity has `disconnectedAt`
+null; `emptySince` is non-null exactly while no player is connected (a disconnected identity may
+lack a time after a crash). Host: `hostId` is null only while no player is connected (pending
+item 7 resolved to null, rooms spec §5.3); a non-null `hostTransfer` belongs to the current,
+disconnected host. A disconnected host without a pending transfer is valid (room creation and
+recovery decide when its wait starts). The next player to connect while `hostId` is null receives
+the role. A host returning at or after its deadline, before the callback, completes the transfer
+inside `connectPlayer`. Departures emit `seatLeft` (if seated), `playerLeft`, any
+`readinessCleared`/`matchStalled`, then `hostChanged`, with a `revokePlayerTokens` effect. Every
+room-domain transition, including R002 `setReady`, emits its own `matchStalled`/`matchResumed`
+via `stallChangeEvents`. A no-op connect/disconnect and a stale deadline callback are rejected
+with `action_not_allowed`; the service treats those as nothing to commit. `assertRoomTransition`
+checks the two-snapshot rules of rooms spec §11 (match start gate; active seat identity changes
+only by departure or an unconfirmed replacement claim). Tests: `presence.test.ts`,
+`host.test.ts`, and additions to `invariants.test.ts`.
 
 - [ ] Connect/disconnect while preserving seat/readiness, tracking disconnect/empty timestamps,
   exposing active-match stalls, and cancelling only a reconnecting current host's deadline.
@@ -613,9 +638,13 @@ export type AuthenticatedPlayer = AuthenticatedPrincipal & {
 - [ ] Validate reactions against the seven `ReactionId` values before emitting them; never accept
   arbitrary reaction text. Using the injected clock and persisted `lastReactionAt`, reject more
   than one accepted reaction per player per 2,000 ms with `reaction_rate_limited`.
-- [ ] For acceptance, increment revision, assert invariants, commit snapshot/events/token effects,
+- [ ] For acceptance, increment revision, assert invariants (`assertRoomInvariants` and R003
+  `assertRoomTransition(before, after)`), commit snapshot/events/token effects,
   replace manager state, then broadcast. Persist rejection before replying. On conflict reload and
-  retry once through dedupe; uncertain storage errors never report success.
+  retry once through dedupe; uncertain storage errors never report success. Room-domain
+  transitions already emit `matchStalled`/`matchResumed`; add R003 `stallChangeEvents` only
+  around engine transitions. An R003 `action_not_allowed` from a no-op connect/disconnect or a
+  stale host-deadline callback commits and sends nothing.
 - [ ] Schedule/cancel derived host deadlines only from committed state.
 - [ ] Log room ID, revision, principal scope, command type, outcome code, and duration through the
   injected logger. Never log command payloads or private snapshots.
@@ -652,7 +681,8 @@ export class RoomDirectory {
   retry at most 32 unique-code conflicts before returning `room_code_generation_failed`. Validate
   the fixed settings through the engine's config boundary,
   hash optional host/Table PINs, and create the unseated host, random first dealer, initial
-  snapshot, first journal entry, and token atomically.
+  snapshot, first journal entry, and token atomically. The host is not connected until its first
+  `hello`, so R003 invariants require the initial `emptySince` to be set (for example `createdAt`).
 - [ ] Reject HTTP JSON bodies above 65,536 UTF-8 bytes before parsing. Parse all three requests
   with R001 Zod schemas before service entry. Compose services at startup rather than module
   import, and never put tokens in URLs/logs.
@@ -723,7 +753,8 @@ export async function startRoomRuntime(dependencies: RoomRuntimeDependencies): P
 - [ ] Capture injected `serverStartedAt` before accepting traffic. Mark apparent saved presence
   offline, preserving older `emptySince`; normalize all player presence when a room activates.
 - [ ] Restore an offline host's deadline from saved disconnect time or startup fallback. Enqueue an
-  elapsed deadline immediately.
+  elapsed deadline immediately (R003 `hostTransferDeadline`; normalized snapshots must satisfy the
+  R003 presence and pending-host invariants).
 - [ ] Schedule periodic expiry at 86,400,000 ms of no player connections. Table views do not clear
   expiry. Delete room/update/token records, send `room_expired`, and close remaining Table sockets.
 - [ ] On shutdown stop acceptance and timers, enqueue current player disconnects, drain room

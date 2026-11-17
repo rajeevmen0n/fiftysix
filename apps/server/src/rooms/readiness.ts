@@ -50,8 +50,9 @@ export function clearAllReady(state: RoomSnapshot): {
  * - Session over: nothing to be Ready for until Restart session.
  *
  * Setting the value a player already has is rejected, so every accepted
- * transition changes the room. Opening the gate (starting or resuming the
- * match) is the service's follow-up step (rooms spec §9).
+ * transition changes the room. A replacement's Ready that completes the
+ * table also reports `matchResumed` (rooms spec §9); starting a match when
+ * the readiness gate opens is the service's follow-up step.
  */
 export function setReady(
   state: RoomSnapshot,
@@ -73,17 +74,18 @@ export function setReady(
     return rejected("not_readyable");
   }
   const replacementReady = stage === "matchActive";
-  return accepted(
-    {
-      ...state,
-      players: state.players.map((candidate) =>
-        candidate.id === playerId
-          ? { ...candidate, ready, replacementReady }
-          : candidate,
-      ),
-    },
-    [{ type: "readyChanged", playerId, ready }],
-  );
+  const next: RoomSnapshot = {
+    ...state,
+    players: state.players.map((candidate) =>
+      candidate.id === playerId
+        ? { ...candidate, ready, replacementReady }
+        : candidate,
+    ),
+  };
+  return accepted(next, [
+    { type: "readyChanged", playerId, ready },
+    ...stallChangeEvents(state, next),
+  ]);
 }
 
 function missingParticipants(
@@ -155,4 +157,30 @@ export function readinessGate(state: RoomSnapshot): RoomGate {
 /** Whether the next match should start now (rooms spec §4.2, §4.3). */
 export function readinessGateIsOpen(gate: RoomGate): boolean {
   return gate.type === "readiness" && nothingMissing(gate);
+}
+
+/**
+ * The stall event a transition within one active match produces (rooms spec
+ * §5.1, §9): `matchStalled` when a required seat goes missing while play was
+ * running, and `matchResumed` when the last missing seat is restored.
+ * Nothing outside an active match or when the stall status is unchanged.
+ * Every room-domain transition already includes these events, so the service
+ * adds them only around engine transitions.
+ */
+export function stallChangeEvents(
+  before: RoomSnapshot,
+  after: RoomSnapshot,
+): CanonicalRoomEvent[] {
+  if (
+    roomStage(before) !== "matchActive" ||
+    roomStage(after) !== "matchActive"
+  ) {
+    return [];
+  }
+  const wasPlaying = readinessGate(before).type === "playing";
+  const isPlaying = readinessGate(after).type === "playing";
+  if (wasPlaying === isPlaying) {
+    return [];
+  }
+  return [{ type: isPlaying ? "matchResumed" : "matchStalled" }];
 }

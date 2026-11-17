@@ -24,10 +24,13 @@ export type RoomInvariantCode =
   | "invalidReplacementState"
   | "invalidHost"
   | "invalidHostTransfer"
+  | "invalidPresence"
   | "invalidPin"
   | "firstDealerOutOfRange"
   | "phaseEngineMismatch"
-  | "engineConfigMismatch";
+  | "engineConfigMismatch"
+  | "invalidSeatTransition"
+  | "invalidMatchStart";
 
 /**
  * Thrown for a room-policy bug. Its message and fields name only the room
@@ -94,8 +97,9 @@ function playerNameIsCanonical(player: PlayerRecord): boolean {
  * Throws `RoomInvariantError` when the snapshot breaks a structural rule:
  * the identity cap, unique IDs and normalized names, join order, the
  * bidirectional seat map, seat and timestamp ranges, readiness and
- * replacement state, host membership, and the room/engine phase and seat
- * count agreement (rooms spec §3.1, §4, §11).
+ * replacement state, presence and the expiry clock, the host and its pending
+ * transfer, and the room/engine phase and seat count agreement (rooms spec
+ * §3.1, §4, §5, §6.4, §11).
  */
 export function assertRoomInvariants(state: RoomSnapshot): void {
   const fail = (code: RoomInvariantCode): never => {
@@ -237,15 +241,99 @@ export function assertRoomInvariants(state: RoomSnapshot): void {
     fail("invalidReadiness");
   }
 
-  // Host: a current identity, or null while selection is pending.
-  if (state.hostId !== null && !ids.has(state.hostId)) {
+  // Presence: a connected identity has no disconnect time, and the expiry
+  // clock runs exactly while no player is connected (rooms spec §6.4). A
+  // disconnected identity may lack a time (a crash, rooms spec §6.3).
+  const anyConnected = state.players.some((player) => player.connected);
+  if (
+    state.players.some(
+      (player) => player.connected && player.disconnectedAt !== null,
+    ) ||
+    anyConnected !== (state.emptySince === null)
+  ) {
+    fail("invalidPresence");
+  }
+
+  // Host: a current identity, or null only while selection is pending
+  // because no player is connected (rooms spec §5.3, §11).
+  if (state.hostId === null ? anyConnected : !ids.has(state.hostId)) {
     fail("invalidHost");
   }
-  if (
-    state.hostTransfer !== null &&
-    (!ids.has(state.hostTransfer.hostId) ||
-      !isTimestamp(state.hostTransfer.deadline))
-  ) {
-    fail("invalidHostTransfer");
+  // A pending transfer belongs to the current host while it is disconnected.
+  if (state.hostTransfer !== null) {
+    const host = state.players.find(
+      (player) => player.id === state.hostTransfer?.hostId,
+    );
+    if (
+      host === undefined ||
+      host.id !== state.hostId ||
+      host.connected ||
+      !isTimestamp(state.hostTransfer.deadline)
+    ) {
+      fail("invalidHostTransfer");
+    }
   }
+}
+
+/**
+ * Throws `RoomInvariantError` (with the later snapshot's ID and revision)
+ * when an accepted transition breaks a rule that spans two snapshots (rooms
+ * spec §4.2, §4.4, §11):
+ *
+ * - A match starts only with every seat occupied and every player connected
+ *   and Ready (`invalidMatchStart`).
+ * - Within an active match an engine seat changes identity only through the
+ *   stalled-replacement flow (`invalidSeatTransition`): a seat empties only
+ *   when its occupant leaves the room, and an empty seat is filled only by
+ *   a previously unseated identity that has not yet confirmed `Ready to
+ *   resume`.
+ *
+ * Both snapshots must already satisfy `assertRoomInvariants`.
+ */
+export function assertRoomTransition(
+  before: RoomSnapshot,
+  after: RoomSnapshot,
+): void {
+  const fail = (code: RoomInvariantCode): never => {
+    throw new RoomInvariantError(after.id, after.revision, code);
+  };
+  const beforeStage = roomStage(before);
+  const afterStage = roomStage(after);
+  if (afterStage !== "matchActive") {
+    return;
+  }
+  if (beforeStage !== "matchActive") {
+    if (
+      after.seats.includes(null) ||
+      after.players.some((player) => !player.connected || !player.ready)
+    ) {
+      fail("invalidMatchStart");
+    }
+    return;
+  }
+  before.seats.forEach((previous, seat) => {
+    const current = after.seats[seat] ?? null;
+    if (previous === current) {
+      return;
+    }
+    if (current === null) {
+      if (after.players.some((player) => player.id === previous)) {
+        fail("invalidSeatTransition");
+      }
+      return;
+    }
+    const newcomerBefore = before.players.find(
+      (player) => player.id === current,
+    );
+    const newcomerAfter = after.players.find((player) => player.id === current);
+    if (
+      previous !== null ||
+      newcomerBefore === undefined ||
+      newcomerBefore.seat !== null ||
+      newcomerAfter === undefined ||
+      newcomerAfter.ready
+    ) {
+      fail("invalidSeatTransition");
+    }
+  });
 }

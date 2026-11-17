@@ -203,7 +203,8 @@ export function room(fixture: RoomFixture): RoomSnapshot {
     engine,
     tablePin: null,
     createdAt: 500,
-    emptySince: null,
+    // The expiry clock runs while no player is connected (rooms spec §6.4).
+    emptySince: players.some((entry) => entry.connected) ? null : 1_000,
   };
 }
 
