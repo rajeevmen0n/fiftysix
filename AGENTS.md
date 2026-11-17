@@ -139,7 +139,9 @@ Run inside the dev shell: `nix develop -c pnpm <script>`.
 - `pnpm test`: runs package tests (`node:test` via `tsx --test`; engine and protocol tests are
   `src/**/*.test.ts` with Node types only in each package's `tsconfig.test.json`, so production
   engine and protocol source stays Node-free; protocol type-equality checks run under
-  `pnpm typecheck`)
+  `pnpm typecheck`; server tests such as `apps/server/src/rooms/*.test.ts` typecheck with the
+  server's Node-typed `tsconfig.json`, and `rooms/purity.test.ts` keeps the pure room aggregate
+  free of I/O, time and randomness)
 - `nix build`, `nix run`, `nix flake check`: build, run, and verify the packaged application
 
 The server creates the configured SQLite database and runs migrations at startup. For local smoke

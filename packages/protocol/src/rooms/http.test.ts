@@ -82,6 +82,10 @@ describe("player names", () => {
       "a b",
       "a\ud800b",
       "\udc00",
+      "a\u202Eb",
+      "a\u202Ab",
+      "a\u2066b",
+      "a\u2069b",
       42,
       null,
     ]) {

@@ -52,8 +52,14 @@ function utf8Length(value: string): number {
  * Unicode line or paragraph separator (U+2028, U+2029). Joiners (ZWJ, ZWNJ),
  * variation selectors and combining marks are format or mark characters and
  * stay allowed, so Malayalam conjuncts and emoji sequences survive.
+ * Bidirectional embedding, override and isolate controls (U+202A–U+202E,
+ * U+2066–U+2069) are rejected so a name cannot reorder surrounding text
+ * (rooms spec §3.1, provisional). The service's "at least one visible
+ * character" rule is checked after trimming and normalization, with the
+ * 1–24 count, so it is not repeated here.
  */
-const forbiddenNameCharacter = /[\p{Cc}\p{Zl}\p{Zp}]/u;
+const forbiddenNameCharacter =
+  /[\p{Cc}\p{Zl}\p{Zp}\u202A-\u202E\u2066-\u2069]/u;
 
 /**
  * A display name as submitted. Trimming, NFKC normalization, the 1–24
@@ -72,7 +78,7 @@ export const playerNameSchema = z
     message: `name must be at most ${maximumNameBytes} UTF-8 bytes`,
   })
   .refine((value) => !forbiddenNameCharacter.test(value), {
-    message: "name must be one line without control characters",
+    message: "name must be one line without control or bidi characters",
   });
 
 /** A player or Table view PIN: exactly four ASCII digits (design.md §9). */

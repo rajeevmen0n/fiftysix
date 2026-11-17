@@ -189,7 +189,7 @@ the wire body (advanced settings optional); R010's directory consumes the parsed
 
 ---
 
-### [ ] R002: Implement the pure room aggregate and seating/readiness policy
+### [x] R002: Implement the pure room aggregate and seating/readiness policy
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
@@ -241,24 +241,56 @@ export interface RoomSnapshot {
 export type DomainEffect = {type: "revokePlayerTokens"; playerId: PlayerId};
 export type DomainResult =
   | {ok: true; state: RoomSnapshot; events: CanonicalRoomEvent[]; effects: DomainEffect[]}
-  | {ok: false; code: RoomRejectionCode; details?: Record<string, unknown>};
+  | {ok: false; code: RoomRejectionCode; details?: RejectionDetails};
+
+export function normalizeName(raw: string): NormalizedName;
+export function assertRoomInvariants(state: RoomSnapshot): void; // throws RoomInvariantError
+export function roomStage(state: RoomSnapshot): RoomStage;
+// RoomStage = "arranging" | "matchActive" | "betweenMatches" | "sessionOver"
+export function hasHostControls(state: RoomSnapshot, actor: PrincipalScope): boolean;
+export function takeSeat(state: RoomSnapshot, playerId: PlayerId, seat: number): DomainResult;
+export function leaveSeat(state: RoomSnapshot, playerId: PlayerId): DomainResult;
+export function hostMovePlayer(
+  state: RoomSnapshot, actor: PrincipalScope, playerId: PlayerId, seat: number,
+): DomainResult;
+export function hostSwapPlayers(
+  state: RoomSnapshot, actor: PrincipalScope, first: PlayerId, second: PlayerId,
+): DomainResult;
+export function setFirstDealer(state: RoomSnapshot, actor: PrincipalScope, seat: number): DomainResult;
+export function clearAllReady(state: RoomSnapshot): {state: RoomSnapshot; events: CanonicalRoomEvent[]};
+export function setReady(state: RoomSnapshot, playerId: PlayerId, ready: boolean): DomainResult;
+export function readinessGate(state: RoomSnapshot): RoomGate;
+export function readinessGateIsOpen(gate: RoomGate): boolean;
 ```
 
-- [ ] Add JSON-safe private state using arrays/tagged records, plus NFKC/locale-independent
+Implementation notes (R002): rejection `details` use protocol `RejectionDetails` (flat
+primitives, as R001 requires) instead of `Record<string, unknown>`. `RoomConfig` is the protocol
+`RoomSettings`; `PinCredential` is `{salt, digest, failures, lockedUntil}` with encoded strings
+(R004 owns its semantics). `CanonicalRoomEvent` is the protocol `RoomEvent` with raw engine
+events. Shared queries and result constructors live in an added `snapshot.ts`. Domain functions
+never change `revision` (the service does) and reject a no-op, so every acceptance has an event
+(a host move to the player's own seat is `action_not_allowed`).
+Host functions take the acting `PrincipalScope` and reject `not_host` themselves. A seated
+player's `lastSeat` equals its seat. `replacementReady` marks a replacement's `Ready to resume`
+during the active match and implies `ready`. Every Ready flag must be cleared when a match ends
+(`clearAllReady`, R009); the invariants require no Ready at `sessionOver`. Focused tests live in
+`apps/server/src/rooms/*.test.ts` (server `test` script added).
+
+- [x] Add JSON-safe private state using arrays/tagged records, plus NFKC/locale-independent
   case normalization and a pure `Intl.Segmenter("und", {granularity: "grapheme"})` helper.
   Accept 1–24 user-perceived characters after trimming and normalization.
-- [ ] Implement `assertRoomInvariants` for identity cap, normalized-name uniqueness, bidirectional
+- [x] Implement `assertRoomInvariants` for identity cap, normalized-name uniqueness, bidirectional
   seats, ranges, host membership, engine seat count, and replacement state. Errors contain only
   room ID/revision/invariant code.
-- [ ] Implement immutable `takeSeat`, `leaveSeat`, `hostMovePlayer`, `hostSwapPlayers`, and
+- [x] Implement immutable `takeSeat`, `leaveSeat`, `hostMovePlayer`, `hostSwapPlayers`, and
   `setFirstDealer`. Ordinary self-movement is arranging-only except a new replacement's first
   vacant-seat claim; host rearrangement is arranging or `matchOver`, never active play.
-- [ ] Implement `clearAllReady`, `setReady`, and `readinessGate`. Setup/between-match seat or dealer
+- [x] Implement `clearAllReady`, `setReady`, and `readinessGate`. Setup/between-match seat or dealer
   changes clear everyone; active replacement preserves existing confirmation and requires only
   the newcomer. Gates require occupied seats, connections, and appropriate Ready flags.
-- [ ] Run typecheck and lint; expect exit 0. Confirm pure files import no Node, storage, network,
+- [x] Run typecheck and lint; expect exit 0. Confirm pure files import no Node, storage, network,
   clock, random, or logger modules.
-- [ ] Review `git diff --check`; update plan/progress and commit
+- [x] Review `git diff --check`; update plan/progress and commit
   `feat(server): add room seating and readiness policy`.
 
 ---
@@ -283,18 +315,21 @@ export function disconnectPlayer(state: RoomSnapshot, playerId: PlayerId, now: n
 export function leaveRoom(state: RoomSnapshot, playerId: PlayerId): DomainResult;
 export function removePlayer(state: RoomSnapshot, actor: PrincipalScope, target: PlayerId): DomainResult;
 export function chooseSuccessor(state: RoomSnapshot, formerHost: PlayerRecord): PlayerId | null;
-export function transferHost(state: RoomSnapshot, target: PlayerId): DomainResult;
+export function transferHost(state: RoomSnapshot, actor: PrincipalScope, target: PlayerId): DomainResult;
 export function applyHostDeadline(state: RoomSnapshot, hostId: PlayerId, deadline: number): DomainResult;
 ```
 
 - [ ] Connect/disconnect while preserving seat/readiness, tracking disconnect/empty timestamps,
   exposing active-match stalls, and cancelling only a reconnecting current host's deadline.
 - [ ] Make Leave/removal permanent with token effects. Active removal requires a disconnected
-  target, preserves seat-owned engine state and existing player confirmation, and marks the
-  vacancy for a newly Ready replacement.
+  target, preserves seat-owned engine state and existing player confirmation, and vacates the
+  seat without changing anyone else's `ready`. There is no vacancy marker: during an active
+  match, a seated player whose `ready` is false is the unconfirmed replacement (R002
+  `readinessGate` lists it under `notReady` until its `Ready to resume`).
 - [ ] Select host by counter-clockwise connected occupied seat from current/last seat, then lowest
   connected join order. Explicit host departure transfers immediately; stale deadline callbacks
-  are no-ops; manual target must be seated.
+  are no-ops; manual target must be seated. Like R002's host functions, `transferHost` takes
+  the acting `PrincipalScope` and rejects `not_host` itself (`hasHostControls`).
 - [ ] Extend invariants for active replacement and pending-host states.
 - [ ] Run typecheck and lint; expect exit 0 and no ambient time calls.
 - [ ] Review `git diff --check`; update plan/progress and commit
@@ -463,7 +498,9 @@ export function redactRoomEvents(
 ```
 
 - [ ] Return exact currently legal seat/player targets for room and host capabilities, including
-  arranging, between-match, stall, replacement, and authorized Table cases.
+  arranging, between-match, stall, replacement, and authorized Table cases. Never offer a no-op
+  that R002 rejects: no `setReady` with the player's current value, no current first-dealer
+  seat, no move to a player's own seat, and no seat the player already occupies.
 - [ ] Give a seated player only its seat-scoped engine view. Whenever an engine exists, give every
   unseated identity the Table/public engine view (including the session log and past sessions,
   never a hand); `engine` is null only before the first session starts (rooms spec §3.1, §8.1;
@@ -562,6 +599,8 @@ export type AuthenticatedPlayer = AuthenticatedPrincipal & {
   room-domain commands. Attach actor/source server-side and reject client-claimed seats.
 - [ ] Map engine commands to the authenticated seat or authorized host/Table source. Reject
   unseated/stalled play. Apply engine actions through its public `act` interface only.
+- [ ] Every transition that ends a match (engine `matchOver` or `sessionOver`) must call R002
+  `clearAllReady` in the same transition; R002 invariants require no Ready at `sessionOver`.
 - [ ] After Ready/connect/seat transitions, evaluate the gate. Start/restart/advance sessions via
   engine system actions and deal a shuffled deck; resume replacements without changing engine
   match state.

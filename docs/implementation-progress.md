@@ -9,7 +9,7 @@ implementation plans.
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
 | Pure engine | `docs/game-engine-implementation-plan.md` | Complete | E010 | Complete |
-| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | In progress | R001 | Execute R002 |
+| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | In progress | R003 | Implement presence, replacement, and host succession policy |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Pending user confirmations
@@ -30,8 +30,42 @@ recorded in the docs; confirm or change them:
    Current behaviour: no (reviewer recommendation).
 7. Open for R005: when the host-transfer wait elapses with nobody connected, is `hostId` the old
    disconnected host or `null` while the transfer is pending (rooms spec §5.3/§11)?
+8. Rooms spec §3.1 (provisional, R002): names reject bidi embedding/override/isolate controls
+   (U+202A–202E, U+2066–2069) and must contain at least one visible character; ZWJ/ZWNJ kept.
+   Still accepted: U+2800 (Braille blank) and LRM/RLM/ALM marks.
 
 ## Last completed unit
+
+R002 — Implement the pure room aggregate and seating/readiness policy — commit
+`feat(server): add room seating and readiness policy`.
+
+- Added pure modules under `apps/server/src/rooms/` (`types`, `snapshot`, `names`, `invariants`,
+  `seating`, `readiness`, `index`) with tests; `apps/server` gained a `test` script. Plan R002
+  now lists the produced signatures and implementation notes.
+- Stages: `arranging`, `matchActive` (engine `awaitingDeal`…`play`), `betweenMatches`
+  (`matchOver`), `sessionOver`. Transitions are immutable, never bump `revision`, and reject
+  no-ops so every acceptance carries an event.
+- Seating: free self-seating while arranging; after the first match only unseated identities
+  (newcomers/replacements) may sit; no seating at `sessionOver`. Host (player host or Table with
+  host controls; functions take `PrincipalScope`) may move/swap while arranging or between
+  matches; `setFirstDealer` only while arranging. Own-seat host move → `action_not_allowed`.
+- Readiness: seat/dealer changes outside a match clear all Ready; a replacement claiming a seat
+  mid-match keeps others' Ready; `replacementReady` = replacement's "Ready to resume".
+  `readinessGate` returns protocol `RoomGate` (`readiness`/`stalled`/`playing` + missing lists).
+- Names: display = trim, NFKC, trim; key = NFKC, upper→lower, NFKC; 1–24 graphemes
+  (`Intl.Segmenter("und")`); provisional rule (pending item 8). Invariants check stored names
+  only for canonical form, so a Node Unicode update can't invalidate a room.
+- Handoffs written into the plan: R003 (no vacancy marker; `transferHost` takes the actor), R007
+  (never offer no-op capabilities), R009 (`clearAllReady` at every match end). Host-null
+  invariant tightening belongs to R003.
+- One Opus implementer and one Opus reviewer; one correction round; reviewer approved.
+  `pnpm-lock.yaml` unchanged.
+- 330 tests (server 56 new).
+- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (330/330),
+  and `git diff --check` passed.
+- Next unit: R003, Implement presence, replacement, and host succession policy.
+
+## Previously completed unit
 
 R001 — Define the complete rooms protocol — commit `feat(protocol): define rooms protocol`.
 
@@ -62,42 +96,6 @@ R001 — Define the complete rooms protocol — commit `feat(protocol): define r
 - Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (274/274),
   and `git diff --check` passed.
 - Next unit: R002, Implement the pure room aggregate and seating/readiness policy.
-
-## Previously completed unit
-
-E010 — Verify the complete engine and hand off to rooms — commit `docs: complete game engine`.
-**The pure engine track is complete.**
-
-- Verification found no engine rule defects; engine behaviour is unchanged. Added
-  `verification.test.ts`: whole-session matrix (56 at 4/48, 4/64, 6/48, 8/48, 8/64; 28 Block and
-  Auto-stop) with per-action purity, invariants, conservation, token, JSON-replay and leader-chain
-  checks; rejected probes; an independent rules oracle written from rules.md; leak scans; a
-  required-coverage list (every phase, contract multiplier, 28 second-auction path, redeal tag,
-  disqualification kind in both modes, outcome, surrender pass/fail at 4/6/8); config/deck matrix;
-  package-boundary checks. Its header maps each item to its tests.
-- Carry-over nits resolved: `hasSecondAuction` in `config.ts` is the single 28 bid-limit
-  expression; invariants now check the face-down slot in `28-second`, stored round winners and
-  `trumpPlayed`; `checkFinishedMatchSummary` uses structural `jsonEqual`; `scoring.test.ts` `run()`
-  replays from JSON copies and compares bytes. Left on purpose: `buildRounds` fixtures don't
-  enforce follow-suit (winners and `trumpPlayed` still obey the rules; legal play is covered by
-  the session matrix).
-- AGENTS.md gained an "Engine" section: modules/exports, how a service drives the engine, view
-  and redaction rules, the /debug full-state exception, and the rooms delivery rule (deliver
-  redacted events only to the current occupant; never replay pre-occupancy per-seat events).
-- For R001: `apps/server` does not import the engine yet, so the server-bundle inspection was
-  vacuous; `index.ts` still exports placeholder `EngineBoundary = never`, imported by
-  `packages/protocol/src/index.ts` — replace it.
-- **Optional open user question (from E009):** keep a public "revealed card" marker after the
-  28 reveal until the card is played? Reviewer recommends no; current behaviour shows it only via
-  the public `trumpRevealed` event.
-- One Opus implementer (resumed once after a usage-limit stop) and one Opus reviewer; one
-  correction round (AGENTS.md wording, stricter coverage tags, header clarifications, byte replay,
-  leader-chain check); reviewer approved.
-- 235 tests (15 new).
-- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (235/235),
-  `git diff --check`, and the zero-dependency manifest check passed. `nix build`/`nix flake check`
-  were not run (user runs Nix builds).
-- Next unit: R001 (rooms subsystem).
 
 ## Implementation readiness
 

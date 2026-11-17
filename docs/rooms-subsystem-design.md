@@ -99,6 +99,13 @@ Because a name is single-line, the network schema rejects every Unicode control 
 (`\p{Cc}`, including C1 controls such as NEL) and ill-formed UTF-16 such as a lone surrogate
 (provisional — pending user confirmation).
 
+Names also reject the bidirectional embedding, override and isolate controls (U+202A–U+202E,
+U+2066–U+2069), which the network schema and the domain service both check, and the domain service
+requires at least one visible character after trimming and normalization: a name made only of
+whitespace, format characters (such as ZWJ or ZWNJ) or other default-ignorable code points is
+empty. ZWJ and ZWNJ remain allowed inside a name with visible characters, as Malayalam and emoji
+sequences need them (provisional — pending user confirmation).
+
 A new identity always enters unseated, including a new replacement joining during a stalled
 match. It chooses an empty seat after joining. Until seated, it receives public room information
 but no hand.
