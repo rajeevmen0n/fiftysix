@@ -84,13 +84,49 @@ Continue with the next unit recorded in [the progress ledger](docs/implementatio
 
 ### Layout
 ```
-packages/engine/    pure engine boundary; game implementation starts at E001
+packages/engine/    complete pure engine for 56 and 28 (see "Engine" below)
 packages/protocol/  shared network types and runtime Zod schemas
 apps/server/        composition root, HTTP/WebSocket edges, runtime adapters, SQLite storage
 apps/web/           React bootstrap app, localized connection state, browser transport
 nix/                reproducible package and services.fiftysix NixOS module
 locales/            browser strings
 ```
+
+### Engine
+`packages/engine/src` implements `docs/game-engine-design.md` in full (E001–E010). All exports
+go through `index.ts`; only modules import each other (no packages, Node, browser, time or
+randomness). Modules:
+
+| Module | Owns |
+|---|---|
+| `types.ts`, `actions.ts`, `events.ts`, `state.ts`, `result.ts` | Config/card types, actions with sources (`ClientEngineAction` for protocol), events, full state, rejections |
+| `cards.ts`, `config.ts`, `seats.ts`, `stakes.ts` | Deck and points, config validation and bid limits, teams and turn order, stake tiers and token transfer |
+| `deal.ts`, `redeal.ts` | Deck validation, dealing (both 28 stages), redeal checks |
+| `auction.ts`, `hidden-trump.ts` | 56 and both 28 auctions, doubles/redoubles, the 28 face-down card and reveal |
+| `play.ts`, `surrender.ts`, `scoring.ts`, `host-actions.ts`, `session.ts` | Card play and disqualification, result certainty and votes, scoring and summaries, End match, session flow |
+| `views.ts` | `view`, `redactEvent`, `allowedActions`, `allowedHostActions` |
+| `engine.ts` | `newSession`, `decide`, `evolve`, `act` (the transition kernel) |
+| `invariants.ts` | `assertEngineInvariants` (structural checks for tests and debugging) |
+
+How a service drives it (rooms start at R001):
+- `newSession(config, firstDealer)`, then `act(state, action)`; persist the returned state and
+  events. `evolve` replays persisted events to the same JSON state. Rejections are values, not
+  exceptions; `evolve` throws only on an engine bug. `view` and `allowedActions` throw for a seat
+  outside the table; `redactEvent` has no state, so it throws only for a seat outside 0–7 and
+  the caller must pass a seat of the event's table.
+- The service supplies every random input: the shuffled deck for `deal` (also after a redeal or a
+  restart, which go straight to `awaitingDeal` with the same dealer) and the first dealer for
+  `newSession`/`restartSession`. It sends `startNextMatch` after the Ready gate and checks the
+  host role before `endMatch`.
+- Send each connection only `view(state, viewer, settings)` and `redactEvent(event, viewer,
+  settings)` for its current seat or `{type: "table"}`; full state and raw events never leave the
+  server for real rooms; only authenticated /debug matches (design.md §14) see full state. Add
+  `allowedHostActions(state)` for the host or an unlocked Table view.
+- Deliver a seat's redacted events only to whoever occupies that seat at delivery time, and never
+  replay per-seat events from before the current occupant took the seat (rooms spec §7.3/§8.3).
+  Unseated viewers are `{type: "table"}`.
+- `packages/engine/src/verification.test.ts` holds the whole-engine verification matrix (complete
+  sessions, replay, leak scans, config/deck matrix, package boundary).
 
 ### Commands
 Run inside the dev shell: `nix develop -c pnpm <script>`.

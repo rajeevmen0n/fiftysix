@@ -1,6 +1,6 @@
 import type { ActionOfType } from "./actions.js";
 import { buildDeck } from "./cards.js";
-import { AUCTION_BID_LIMITS } from "./config.js";
+import { AUCTION_BID_LIMITS, hasSecondAuction } from "./config.js";
 import type {
   AuctionStartedEvent,
   DealtEvent,
@@ -267,10 +267,7 @@ export function dealSecondStage(state: EngineState): EngineEvent[] {
     return events;
   }
 
-  if (
-    auction.redoubled ||
-    contract.amount >= AUCTION_BID_LIMITS["28-second"].maximum
-  ) {
+  if (!hasSecondAuction(auction.redoubled, contract.amount)) {
     // rules §10.2: a redoubled first auction, or one whose bid is already
     // 28 and can't be overbid, has no second auction.
     const playStarted: PlayStartedEvent = {
@@ -422,8 +419,7 @@ export function evolveAuctionStarted(
       previous === null ||
       previous.stage !== "28-first" ||
       previous.highBid === null ||
-      previous.redoubled ||
-      previous.highBid.amount >= AUCTION_BID_LIMITS["28-second"].maximum
+      !hasSecondAuction(previous.redoubled, previous.highBid.amount)
     ) {
       throw new Error(
         "Cannot apply auctionStarted(28-second) event: expected a finished 28 first auction that allows a second auction",

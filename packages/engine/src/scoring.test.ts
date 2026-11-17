@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { EngineAction } from "./actions.js";
-import { buildDeck, cardPoints } from "./cards.js";
+import { buildDeck, cardPoints, RANKS } from "./cards.js";
 import { act, decide, evolve, newSession } from "./engine.js";
 import type { EngineEvent } from "./events.js";
 import { decideHostAction } from "./host-actions.js";
 import { assertEngineInvariants, EngineInvariantError } from "./invariants.js";
+import { countingTrumpSuit, roundWinner } from "./play.js";
 import { scoreMatch } from "./scoring.js";
 import { teamOf } from "./seats.js";
 import { decideSessionAction } from "./session.js";
 import type {
   CompletedRound,
+  Contract,
   EngineState,
   MatchState,
   MatchSummary,
@@ -186,7 +188,11 @@ interface Flow {
   events: EngineEvent[];
 }
 
-/** Applies each action via `act`, asserting acceptance, replay, and invariants. */
+/**
+ * Applies each action via `act`, asserting acceptance, invariants, and that
+ * the events alone rebuild the new state after a JSON round trip of both the
+ * previous state and the events (as a service persisting them would).
+ */
 function run(state: EngineState, actions: EngineAction[]): Flow {
   let current = state;
   let events: EngineEvent[] = [];
@@ -200,11 +206,14 @@ function run(state: EngineState, actions: EngineAction[]): Flow {
     if (!result.ok) {
       throw new Error("unreachable");
     }
-    const replayed = result.events.reduce(
+    const replayed = (
+      JSON.parse(JSON.stringify(result.events)) as EngineEvent[]
+    ).reduce(
       (acc, event) => evolve(acc, event),
-      current,
+      JSON.parse(JSON.stringify(current)) as EngineState,
     );
     assert.equal(JSON.stringify(replayed), JSON.stringify(result.state));
+    assert.deepStrictEqual(replayed, result.state);
     assertEngineInvariants(result.state);
     current = result.state;
     events = result.events;
@@ -241,13 +250,21 @@ function playing56(
   calls: EngineAction[],
   config: EngineConfig = config56(),
   dealer = 0,
+  deck: readonly Card[] = buildDeck(config),
 ): EngineState {
-  const state = run(newState(config, dealer), [
-    deal(buildDeck(config)),
-    ...calls,
-  ]).state;
+  const state = run(newState(config, dealer), [deal(deck), ...calls]).state;
   assert.equal(state.phase.type, "play");
   return state;
+}
+
+/**
+ * The natural 4-player 48-card deck shifted by one card. Dealt by seat 0,
+ * team A (seats 2 and 0) holds the first copy of every J/A/K and 9/10/Q, so
+ * it can win every round; with the natural deck team B can.
+ */
+function teamASweepDeck(): Card[] {
+  const natural = buildDeck(config56());
+  return [natural.at(-1) as Card, ...natural.slice(0, -1)];
 }
 
 /** A 28 match in play with seat 1's unrevealed hidden trump (hearts). */
@@ -264,35 +281,82 @@ function playing28Hidden(config: EngineConfig = config28()): EngineState {
 }
 
 /**
- * Hand-builds finished rounds on a match in play (card play itself is E007):
- * each round takes the first card of every hand in turn order from its
- * leader, and is won by the next seat in `winners`, who leads the next round.
- * `buildRounds` doesn't check invariants; `withRounds` does.
+ * One round from `leader` that `team` wins by the rules (`roundWinner`),
+ * taking one card from each hand in turn order. A depth-first search over the
+ * hands: each seat tries its strongest card first (counting trump, then
+ * rank), so the opponents shed the cards that could beat the winners while
+ * those cards can still lose. Follow-suit legality is not modelled.
+ */
+function roundWonBy(
+  hands: readonly (readonly Card[])[],
+  leader: number,
+  team: Team,
+  contract: Contract,
+): RoundPlay[] | null {
+  const playerCount = hands.length;
+  const trump = countingTrumpSuit(contract, false);
+  const strength = (card: Card): number =>
+    (card.suit === trump ? 100 : 0) - RANKS.indexOf(card.rank);
+  const search = (plays: RoundPlay[]): RoundPlay[] | null => {
+    if (plays.length === playerCount) {
+      return teamOf(roundWinner({ plays }, contract, false)) === team
+        ? plays
+        : null;
+    }
+    const player = (leader + plays.length) % playerCount;
+    const options = [...(hands[player] ?? [])].sort(
+      (left, right) => strength(right) - strength(left),
+    );
+    for (const card of options) {
+      const found = search([
+        ...plays,
+        { seat: player, card, fromFaceDown: false },
+      ]);
+      if (found !== null) {
+        return found;
+      }
+    }
+    return null;
+  };
+  return search([]);
+}
+
+/**
+ * Hand-builds finished rounds on a 56 match in play: round `i` is won by a
+ * seat of team `winners[i]`, who leads the next round. Every round's winner
+ * and `trumpPlayed` follow the rules for the cards in it (`roundWonBy`), so
+ * the result passes the round invariants; only follow-suit legality is
+ * skipped. `buildRounds` doesn't check invariants; `withRounds` does.
  */
 function buildRounds(
   state: EngineState,
-  winners: readonly number[],
+  winners: readonly Team[],
 ): EngineState {
   const match = matchOf(state);
-  const { playerCount } = state.config;
+  const contract = match.contract;
+  assert.ok(contract !== null && contract.trump.type !== "hidden");
+  assert.equal(match.rounds.length, 0);
   const hands = match.hands.map((hand) => [...hand]);
   const rounds: CompletedRound[] = [];
   const points = { A: 0, B: 0 };
+  let trumpPlayed = false;
   let leader = match.currentRound?.leader ?? 0;
-  for (const winner of winners) {
-    const plays: RoundPlay[] = [];
-    for (let offset = 0; offset < playerCount; offset += 1) {
-      const player = (leader + offset) % playerCount;
-      const card = hands[player]?.shift();
-      assert.ok(card !== undefined);
-      plays.push({ seat: player, card, fromFaceDown: false });
+  for (const team of winners) {
+    const plays = roundWonBy(hands, leader, team, contract);
+    assert.ok(plays !== null, `no round from seat ${leader} for team ${team}`);
+    for (const play of plays) {
+      const hand = hands[play.seat] ?? [];
+      hand.splice(hand.indexOf(play.card), 1);
     }
+    const winner = roundWinner({ plays }, contract, false);
     const roundPoints = plays.reduce(
       (total, play) => total + cardPoints(play.card),
       0,
     );
     rounds.push({ leader, plays, winner, points: roundPoints });
     points[teamOf(winner)] += roundPoints;
+    const trump = countingTrumpSuit(contract, false);
+    trumpPlayed ||= plays.some((play) => play.card.suit === trump);
     leader = winner;
   }
   return withMatch(state, {
@@ -300,6 +364,7 @@ function buildRounds(
     hands,
     rounds,
     points,
+    trumpPlayed,
     currentRound: {
       leader,
       plays: [],
@@ -311,10 +376,7 @@ function buildRounds(
   });
 }
 
-function withRounds(
-  state: EngineState,
-  winners: readonly number[],
-): EngineState {
+function withRounds(state: EngineState, winners: readonly Team[]): EngineState {
   const next = buildRounds(state, winners);
   assertEngineInvariants(next);
   return next;
@@ -331,7 +393,7 @@ function withVote(state: EngineState): EngineState {
   // the certainty check records B's loss (design §10.1), and seat 1 proposes.
   let decided = state;
   for (let rounds = 1; losingTeamIfCertain(decided) === null; rounds += 1) {
-    decided = buildRounds(state, Array(rounds).fill(0));
+    decided = buildRounds(state, Array(rounds).fill("A"));
   }
   assert.equal(losingTeamIfCertain(decided), "B");
   const match = matchOf(decided);
@@ -388,49 +450,51 @@ describe("scoreMatch: who pays (design §10.3)", () => {
   const rows: {
     name: string;
     outcome: ScoredOutcome;
-    winners: number[];
+    winners: Team[];
+    deck?: Card[];
     payer: Team;
     stake: "win" | "loss";
   }[] = [
     {
       name: "made",
       outcome: { type: "made" },
-      winners: Array(12).fill(1),
+      winners: Array(12).fill("B"),
       payer: "A",
       stake: "win",
     },
     {
       name: "failed",
       outcome: { type: "failed" },
-      winners: Array(12).fill(0),
+      winners: Array(12).fill("A"),
+      deck: teamASweepDeck(),
       payer: "B",
       stake: "loss",
     },
     {
       name: "disqualified bidding-team seat",
       outcome: { type: "disqualified", seat: 3, kind: "didNotFollowSuit" },
-      winners: [1, 0],
+      winners: ["B", "A"],
       payer: "B",
       stake: "loss",
     },
     {
       name: "disqualified defender",
       outcome: { type: "disqualified", seat: 2, kind: "ledTrumpEarly" },
-      winners: [0],
+      winners: ["A"],
       payer: "A",
       stake: "win",
     },
     {
       name: "surrendered by the defenders",
       outcome: { type: "surrendered", team: "A" },
-      winners: Array(6).fill(3),
+      winners: Array(6).fill("B"),
       payer: "A",
       stake: "win",
     },
     {
       name: "surrendered by the bidding team",
       outcome: { type: "surrendered", team: "B" },
-      winners: Array(6).fill(2),
+      winners: Array(6).fill("A"),
       payer: "B",
       stake: "loss",
     },
@@ -444,7 +508,7 @@ describe("scoreMatch: who pays (design §10.3)", () => {
     {
       name: "awarded to the defenders",
       outcome: { type: "awarded", team: "A" },
-      winners: [0, 1],
+      winners: ["A", "B"],
       payer: "B",
       stake: "loss",
     },
@@ -453,7 +517,10 @@ describe("scoreMatch: who pays (design §10.3)", () => {
   for (const row of rows) {
     it(`${row.name}: ${row.payer} pays the ${row.stake} stake at ×1, ×2, and ×4`, () => {
       for (const multiplier of [1, 2, 4] as const) {
-        const state = withRounds(playing56(calls56(multiplier)), row.winners);
+        const state = withRounds(
+          playing56(calls56(multiplier), config56(), 0, row.deck),
+          row.winners,
+        );
         const { points } = matchOf(state);
         const amount = (row.stake === "win" ? 1 : 2) * multiplier;
         const tokens = {
@@ -484,7 +551,7 @@ describe("scoreMatch: who pays (design §10.3)", () => {
   }
 
   it("uses the contract's tier: a redoubled 56 wins 12 or loses 16", () => {
-    const made = withRounds(playing56(calls56(4, 56)), Array(12).fill(3));
+    const made = withRounds(playing56(calls56(4, 56)), Array(12).fill("B"));
     const [madeEnded] = scoreMatch(made, { type: "made" });
     assert.equal(madeEnded?.type, "matchEnded");
     assert.deepEqual(
@@ -492,7 +559,7 @@ describe("scoreMatch: who pays (design §10.3)", () => {
       { payer: "A", amount: 12 },
     );
 
-    const failed = withRounds(playing56(calls56(4, 56)), [1, 0]);
+    const failed = withRounds(playing56(calls56(4, 56)), ["B", "A"]);
     const events = scoreMatch(failed, { type: "failed" });
     assert.deepEqual(
       events.map((event) => event.type),
@@ -532,7 +599,7 @@ describe("scoreMatch: who pays (design §10.3)", () => {
     const state = playing56(calls56(1));
     assert.throws(() => scoreMatch(state, { type: "made" }));
     assert.throws(() =>
-      scoreMatch(withRounds(state, Array(12).fill(1)), { type: "failed" }),
+      scoreMatch(withRounds(state, Array(12).fill("B")), { type: "failed" }),
     );
     assert.throws(() =>
       scoreMatch(newState(config56()), { type: "awarded", team: "A" }),
@@ -543,7 +610,10 @@ describe("scoreMatch: who pays (design §10.3)", () => {
 describe("scoring: capped payment and session end", () => {
   it("caps the payment at what the payer holds; team A wins the session", () => {
     const state = withTokens(
-      withRounds(playing56(calls56(4)), Array(12).fill(0)),
+      withRounds(
+        playing56(calls56(4), config56(), 0, teamASweepDeck()),
+        Array(12).fill("A"),
+      ),
       { A: 37, B: 3 },
     );
     const events = scoreMatch(state, { type: "failed" });
@@ -714,7 +784,7 @@ describe("host endMatch(restart) (design §10.2)", () => {
   });
 
   it("play: logs the contract and points so far without moving tokens", () => {
-    const state = withRounds(playing56(calls56(2)), [1, 2]);
+    const state = withRounds(playing56(calls56(2)), ["B", "A"]);
     assert.ok(matchOf(state).points.A > 0 || matchOf(state).points.B > 0);
     expectRestart(state, contract56(2));
 

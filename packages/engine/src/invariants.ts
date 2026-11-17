@@ -1,6 +1,7 @@
 import { carriedBidStands } from "./auction.js";
 import { buildDeck, cardPoints } from "./cards.js";
-import { AUCTION_BID_LIMITS, validateConfig } from "./config.js";
+import { hasSecondAuction, validateConfig } from "./config.js";
+import { countingTrumpSuit, roundWinner } from "./play.js";
 import { assertNever } from "./result.js";
 import { isSeatInRange, teamOf } from "./seats.js";
 import type {
@@ -128,6 +129,43 @@ function checkSummary(summary: MatchSummary, config: EngineConfig): void {
   }
 }
 
+/**
+ * Structural equality of two JSON values, independent of object key order
+ * (a state rebuilt from JSON or by another evolver may order keys
+ * differently).
+ */
+function jsonEqual(left: unknown, right: unknown): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object" ||
+    Array.isArray(left) !== Array.isArray(right)
+  ) {
+    return false;
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((item, index) => jsonEqual(item, right[index]))
+    );
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const keys = Object.keys(leftRecord);
+  return (
+    keys.length === Object.keys(rightRecord).length &&
+    keys.every(
+      (key) =>
+        Object.hasOwn(rightRecord, key) &&
+        jsonEqual(leftRecord[key], rightRecord[key]),
+    )
+  );
+}
+
 function summaryTokensMatch(
   summary: MatchSummary,
   state: EngineState,
@@ -149,10 +187,7 @@ function checkFinishedMatchSummary(
   check(isScoredOutcome(summary.outcome), "invalidSummary");
   check(summary.dealer === state.dealer, "invalidSummary");
   const last = state.matchLog[state.matchLog.length - 1];
-  check(
-    last !== undefined && JSON.stringify(last) === JSON.stringify(summary),
-    "invalidSummary",
-  );
+  check(last !== undefined && jsonEqual(last, summary), "invalidSummary");
   check(summaryTokensMatch(summary, state), "invalidTokens");
 }
 
@@ -296,6 +331,7 @@ function checkMatch(
       "invalidTurn",
     );
   }
+  checkRoundResults(match);
 
   const current = match.currentRound;
   if (current !== null) {
@@ -330,6 +366,32 @@ function checkMatch(
   );
 
   checkCardLocations(state, match);
+}
+
+/**
+ * design §9.5–§9.6: each finished round's stored winner is the seat the rules
+ * pick from its cards, and `trumpPlayed` says exactly whether a finished
+ * round held a card that counted as trump. In 28 a hidden suit counts only
+ * from the reveal round onward. Rounds exist only once a contract does.
+ * Must run after the rounds' play counts are checked.
+ */
+function checkRoundResults(match: MatchState): void {
+  const { contract, revealedInRound } = match;
+  if (contract === null) {
+    check(match.rounds.length === 0 && !match.trumpPlayed, "invalidRound");
+    return;
+  }
+  let trumpPlayed = false;
+  match.rounds.forEach((round, index) => {
+    const revealed = revealedInRound !== null && index >= revealedInRound;
+    check(
+      round.winner === roundWinner(round, contract, revealed),
+      "invalidRound",
+    );
+    const trump = countingTrumpSuit(contract, revealed);
+    trumpPlayed ||= round.plays.some((play) => play.card.suit === trump);
+  });
+  check(match.trumpPlayed === trumpPlayed, "invalidRound");
 }
 
 /**
@@ -415,9 +477,8 @@ function checkAuctionStage(
         ? match.faceDown === null && match.contract === null
         : phase === "play" &&
             match.contract !== null &&
-            (auction.redoubled ||
-              auction.highBid?.amount ===
-                AUCTION_BID_LIMITS["28-first"].maximum),
+            auction.highBid !== null &&
+            !hasSecondAuction(auction.redoubled, auction.highBid.amount),
       "phaseMatchMismatch",
     );
     return;
@@ -448,11 +509,25 @@ function checkAuctionStage(
       "invalidAuctionState",
     );
   }
+  // A carried bid comes from a first auction that wasn't redoubled (a
+  // redouble skips the second auction) and left room to overbid.
   check(
     (!carriedBid.bid.forced || carriedBid.doubledBy === null) &&
-      carriedBid.bid.amount < AUCTION_BID_LIMITS["28-second"].maximum,
+      hasSecondAuction(false, carriedBid.bid.amount),
     "invalidAuctionState",
   );
+  if (phase === "auction") {
+    // rules §10.2: while the second auction runs, the first-auction
+    // face-down card stays face down with its owner, whatever has been
+    // called since; only the auction's end returns it (design §8.4). A
+    // carried forced 14 no trump never had one.
+    check(
+      carriedBid.bid.forced
+        ? match.faceDown === null
+        : match.faceDown?.owner === carriedBid.bid.seat,
+      "invalidAuctionState",
+    );
+  }
   if (carriedBidStands(auction)) {
     // No second-auction bid or double yet: the carried state is intact and,
     // until a reveal during play, so is its face-down card (none for a

@@ -8,11 +8,47 @@ implementation plans.
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
-| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E010 | Verify the complete engine and hand off to rooms |
-| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
+| Pure engine | `docs/game-engine-implementation-plan.md` | Complete | E010 | Complete |
+| Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Ready | R001 | Execute R001 |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
+
+E010 — Verify the complete engine and hand off to rooms — commit `docs: complete game engine`.
+**The pure engine track is complete.**
+
+- Verification found no engine rule defects; engine behaviour is unchanged. Added
+  `verification.test.ts`: whole-session matrix (56 at 4/48, 4/64, 6/48, 8/48, 8/64; 28 Block and
+  Auto-stop) with per-action purity, invariants, conservation, token, JSON-replay and leader-chain
+  checks; rejected probes; an independent rules oracle written from rules.md; leak scans; a
+  required-coverage list (every phase, contract multiplier, 28 second-auction path, redeal tag,
+  disqualification kind in both modes, outcome, surrender pass/fail at 4/6/8); config/deck matrix;
+  package-boundary checks. Its header maps each item to its tests.
+- Carry-over nits resolved: `hasSecondAuction` in `config.ts` is the single 28 bid-limit
+  expression; invariants now check the face-down slot in `28-second`, stored round winners and
+  `trumpPlayed`; `checkFinishedMatchSummary` uses structural `jsonEqual`; `scoring.test.ts` `run()`
+  replays from JSON copies and compares bytes. Left on purpose: `buildRounds` fixtures don't
+  enforce follow-suit (winners and `trumpPlayed` still obey the rules; legal play is covered by
+  the session matrix).
+- AGENTS.md gained an "Engine" section: modules/exports, how a service drives the engine, view
+  and redaction rules, the /debug full-state exception, and the rooms delivery rule (deliver
+  redacted events only to the current occupant; never replay pre-occupancy per-seat events).
+- For R001: `apps/server` does not import the engine yet, so the server-bundle inspection was
+  vacuous; `index.ts` still exports placeholder `EngineBoundary = never`, imported by
+  `packages/protocol/src/index.ts` — replace it.
+- **Optional open user question (from E009):** keep a public "revealed card" marker after the
+  28 reveal until the card is played? Reviewer recommends no; current behaviour shows it only via
+  the public `trumpRevealed` event.
+- One Opus implementer (resumed once after a usage-limit stop) and one Opus reviewer; one
+  correction round (AGENTS.md wording, stricter coverage tags, header clarifications, byte replay,
+  leader-chain check); reviewer approved.
+- 235 tests (15 new).
+- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (235/235),
+  `git diff --check`, and the zero-dependency manifest check passed. `nix build`/`nix flake check`
+  were not run (user runs Nix builds).
+- Next unit: R001 (rooms subsystem).
+
+## Previously completed unit
 
 E009 — Implement capabilities, views, and event redaction — implementation commit
 `feat(engine): expose safe views and actions`.
@@ -45,39 +81,6 @@ E009 — Implement capabilities, views, and event redaction — implementation c
 - Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (220/220),
   `git diff --check`, and the zero-dependency manifest check all passed.
 - Next unit: E010, Verify the complete engine and hand off to rooms.
-
-## Previously completed unit
-
-E008 — Implement result certainty and surrender voting — implementation commit
-`feat(engine): implement result certainty and surrender voting`.
-
-- Added `surrender.ts` (`losingTeamIfCertain`, `decideSurrenderAction`, internal helpers, and
-  evolvers for the five surrender events); the certainty check runs in `play.ts` `completePlay`
-  right after `roundWon`. `engine.ts` routes surrender actions/events; the `unsupportedAction` and
-  `missingEvolver` placeholders were deleted.
-- Certainty: defenders lost once bidding-team points reach the bid; bidding team lost once its
-  points plus all uncollected points (56/28 minus collected) fall below the bid. `resultDecided`
-  is emitted once, only with the surrender option on, and also after the final round (between
-  `roundWon` and `matchEnded`, spec §9.6/§10.1; the UI may skip that notice).
-- Votes: proposer counts as yes; passes at ⌊T/2⌋+1 (2/2, 2/3, 3/4); fails early when it can no
-  longer pass. Orders: `surrenderVoted` → `[surrenderFailed]` or `surrendered`, `matchEnded`,
-  `[sessionEnded]`. A failed vote sets `lastFailedRound`, lifted at the next round.
-- No new rejection codes: `surrenderVoteRunning` for a losing-team proposal during a vote; other
-  surrender rejections use `actionNotAllowed` with a `reason` (documented in spec §10.1). A
-  winning-team proposal gets `resultNotDecided` (no vote) or `notOnLosingTeam` (vote running), so
-  certainty never leaks.
-- Invariant `invalidSurrender`: `decided === losingTeamIfCertain(state)`, vote well-formed,
-  surrender state empty outside play or with the option off. Test fixtures that built impossible
-  surrender states were rewritten to reach them legally (`scoring.test.ts` `buildRounds`/`withVote`).
-- Still open: E007 note (round-winner/`trumpPlayed` invariants not added because `buildRounds`
-  uses fake winners), E005/E006 nits.
-- One Opus implementer and one Opus reviewer; one correction round (four non-blocking nits);
-  reviewer approved.
-- 198 tests (26 new).
-- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (198/198),
-  `git diff --check`, and the zero-dependency manifest check all passed.
-- Next unit: E009, Implement capabilities, views, and event redaction (user authorized continuing
-  without per-unit approval for this session).
 
 ## Implementation readiness
 

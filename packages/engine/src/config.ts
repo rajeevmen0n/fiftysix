@@ -16,6 +16,17 @@ export const AUCTION_BID_LIMITS: Readonly<
   "28-second": { minimum: 21, maximum: 28 },
 };
 
+/**
+ * Rules §10.2: whether a 28 first auction that ended with `redoubled` and a
+ * bid of `amount` is followed by a second auction. A redouble ends bidding
+ * for the match, and a bid already at the 28 maximum can't be overbid, so
+ * either way the second deal goes straight to play. This is the single
+ * expression of that limit for `deal.ts` and `invariants.ts`.
+ */
+export function hasSecondAuction(redoubled: boolean, amount: number): boolean {
+  return !redoubled && amount < AUCTION_BID_LIMITS["28-second"].maximum;
+}
+
 const REDEAL_THRESHOLD_CAPS: Readonly<
   Record<EngineConfig["gameType"], Readonly<Record<number, number>>>
 > = {

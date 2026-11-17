@@ -477,27 +477,27 @@ export function revealBlocker(state: EngineState, seat: Seat): RevealBlocker | n
 export function scorePlayedOutMatch(state: EngineState): EngineEvent[];
 ```
 
-- [ ] Accept card/reveal actions only during play, on the seat's turn, and outside a surrender
+- [x] Accept card/reveal actions only during play, on the seat's turn, and outside a surrender
   vote. Require cards to be in the acting hand except the precisely forced face-down case.
-- [ ] Enforce following lead suit and the trump-lead restriction. Hidden trump is plain until
+- [x] Enforce following lead suit and the trump-lead restriction. Hidden trump is plain until
   reveal; no-trump permits every lead; holding only trump permits the early lead and marks trump
   played after that round.
-- [ ] Implement `askReveal` only after a lead, while hidden, once on that turn, and while not in a
+- [x] Implement `askReveal` only after a lead, while hidden, once on that turn, and while not in a
   forced bidder case. Emit `revealAsked` then `trumpRevealed`, return the card to the bidder's
   hand, and allow that asker any card for the current turn.
-- [ ] Force the face-down card when trump is led and the bidder has no other trump in hand, or
+- [x] Force the face-down card when trump is led and the bidder has no other trump in hand, or
   when it is the bidder's last card. Emit reveal before play. Reject every other direct
   face-down play in both modes.
-- [ ] In Block mode reject each of the four disqualifying kinds. In Auto-stop accept the submitted
+- [x] In Block mode reject each of the four disqualifying kinds. In Auto-stop accept the submitted
   play/reveal events, emit `disqualified`, stop before round completion, and invoke the correct
   immediate scoring path using already-collected points.
-- [ ] Determine round winner by highest counting trump, otherwise highest lead suit; preserve
+- [x] Determine round winner by highest counting trump, otherwise highest lead suit; preserve
   first-play precedence for identical cards. Emit `roundWon`, add points, mark prior-round trump,
   clear reveal-turn flags, and lead from the winner. Score made/failed after the final round.
-- [ ] Add and run automated tests for follow-suit, free discard, early trump exceptions, no
+- [x] Add and run automated tests for follow-suit, free discard, early trump exceptions, no
   trump, identical copies, reveal-before-earlier-plays counting as trump, forced face-down
   variants, each illegal mode/kind, winner-led next round, total points, and last-round scoring.
-- [ ] Run typecheck, lint, build, card-conservation/points/event-replay checks, and
+- [x] Run typecheck, lint, build, card-conservation/points/event-replay checks, and
   `git diff --check`; require success. Update plan/progress and commit
   `feat(engine): implement card play and trump reveal`.
 
@@ -524,21 +524,21 @@ export function losingTeamIfCertain(state: EngineState): Team | null;
 export function decideSurrenderAction(state: EngineState, action: EngineAction): Decision;
 ```
 
-- [ ] After every completed round, when surrender is on, set certainty once if the bidding team
+- [x] After every completed round, when surrender is on, set certainty once if the bidding team
   has made the bid or cannot reach it with uncollected points. Emit `resultDecided` once and keep
   it for the match; do not expose it to the winning team later in redaction.
-- [ ] Allow any losing-team seat to propose outside turn when certainty exists, no vote runs, and
+- [x] Allow any losing-team seat to propose outside turn when certainty exists, no vote runs, and
   no vote failed in the current round. Count the proposer as yes and pause card/reveal actions.
-- [ ] Accept one yes/no vote from each other losing-team member. Pass strictly above half of team
+- [x] Accept one yes/no vote from each other losing-team member. Pass strictly above half of team
   size (2/2, 2/3, 3/4), emit `surrendered`, and score the certain losing side. Fail immediately
   when remaining votes cannot reach that threshold, emit `surrenderFailed`, remember the round,
   and resume play.
-- [ ] Reject winners, duplicate votes, proposals before certainty, repeated same-round proposals,
+- [x] Reject winners, duplicate votes, proposals before certainty, repeated same-round proposals,
   and all surrender actions when the option is off. Preserve host restart/award during a vote.
-- [ ] Add and run automated tests for certainty in both result directions and all team sizes, plus
+- [x] Add and run automated tests for certainty in both result directions and all team sizes, plus
   proposal/vote ordering, pass/fail thresholds, duplicate/opponent votes, same-round lockout,
   next-round reset, play pause, host resolution, scoring, and replay.
-- [ ] Run typecheck, lint, build, invariants, and `git diff --check`; require success. Update
+- [x] Run typecheck, lint, build, invariants, and `git diff --check`; require success. Update
   plan/progress and commit `feat(engine): add surrender voting`.
 
 ---
@@ -605,32 +605,32 @@ export function redactEvent(
 ): RedactedEngineEvent | null;
 ```
 
-- [ ] Represent allowed bids as explicit amount ranges plus valid suit/style choices and allowed
+- [x] Represent allowed bids as explicit amount ranges plus valid suit/style choices and allowed
   placement/play actions as exact card lists. Include pass/double/redouble, reveal, surrender,
   and vote capabilities exactly when `decide` accepts them; in Auto-stop include disqualifying
   submissions as specified, never always-rejected face-down cards.
-- [ ] Return host restart in auction/placement/play, and award targets only in play. Keep host
+- [x] Return host restart in auction/placement/play, and award targets only in play. Keep host
   authorization outside the engine; this function exposes phase capability only.
-- [ ] Build public views with phase, seat/team metadata, token balances, dealer/turn, auction and
+- [x] Build public views with phase, seat/team metadata, token balances, dealer/turn, auction and
   contract, public trump/face-down marker, card counts, current round, vote, summaries, match log,
   and past sessions. Apply none/last/full round history and live-points settings.
-- [ ] Add only the viewer seat's hand, face-down card, capabilities, and losing-team certainty.
+- [x] Add only the viewer seat's hand, face-down card, capabilities, and losing-team certainty.
   Table receives no hand, hidden trump, undealt cards, or allowed seat action. Hide 28 trump from
   every non-bidder until reveal. If the match ends first, omit it from every recipient's summary,
   including the bidder's, so later seat movement cannot expose historical private state.
-- [ ] Redact deals to own cards plus other counts (counts only for Table), face-down placement/
+- [x] Redact deals to own cards plus other counts (counts only for Table), face-down placement/
   return to owner only, hidden contract trump to bidder only, round points when live points is
   off, and result certainty to losing seats only. Assert that canonical nested match summaries
   already contain no unrevealed 28 suit/card. Preserve order by allowing `null` redactions.
-- [ ] Add and run automated tests using representative state in every phase: compare each listed
+- [x] Add and run automated tests using representative state in every phase: compare each listed
   capability with `decide`, inspect every seat/Table view and event variant for forbidden cards/
   trump, and confirm view/redaction never mutate full state.
-- [ ] Run typecheck, lint, build, JSON checks, and `git diff --check`; require success. Update
+- [x] Run typecheck, lint, build, JSON checks, and `git diff --check`; require success. Update
   plan/progress and commit `feat(engine): expose safe views and actions`.
 
 ---
 
-### [ ] E010: Verify the complete engine and hand off to rooms
+### [x] E010: Verify the complete engine and hand off to rooms
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
@@ -653,22 +653,22 @@ made/failed/capped/multiplied scoring; host restart/award; surrender pass/fail f
 dealer rotation; session restart; every viewer/settings combination; full event replay.
 ```
 
-- [ ] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and
+- [x] Run `nix develop -c pnpm typecheck`, `nix develop -c pnpm lint`, and
   `nix develop -c pnpm build`; require exit 0.
-- [ ] Exercise every required matrix item with committed deterministic automated tests. For at
+- [x] Exercise every required matrix item with committed deterministic automated tests. For at
   least one complete 56 session and one complete 28 session, record actions/events, rebuild
   through `evolve`, and require JSON equality with each `act` state after every action.
-- [ ] On every accepted action, require unchanged input JSON, passing invariants, card
+- [x] On every accepted action, require unchanged input JSON, passing invariants, card
   conservation, point totals, nonnegative tokens, deterministic duplicate results, and JSON
   round-trip. On every rejected action, require unchanged state and no events.
-- [ ] Test all seat/Table views and redacted event streams from the full sessions. Search for
+- [x] Test all seat/Table views and redacted event streams from the full sessions. Search for
   another seat's card IDs, `undealt`, and unrevealed trump; require none outside the authorized
   owner/full-state test fixture.
-- [ ] Inspect the dependency/import graph and emitted server bundle: require zero engine package
+- [x] Inspect the dependency/import graph and emitted server bundle: require zero engine package
   dependencies and no Node/browser/protocol/server/storage/network/time/random/logger imports.
-- [ ] Update `AGENTS.md` with the actual engine module/export layout, mark this plan and engine
+- [x] Update `AGENTS.md` with the actual engine module/export layout, mark this plan and engine
   track complete, and update rooms to ready with R001 as next only after the skeleton is also
   complete.
-- [ ] Run `git status --short` and `git diff --check`, review all final documentation changes,
+- [x] Run `git status --short` and `git diff --check`, review all final documentation changes,
   and commit `docs: complete game engine`. Stop and ask the user before starting rooms or UI
   implementation.
