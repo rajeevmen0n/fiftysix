@@ -352,6 +352,8 @@ and the face-down card stays hidden.
   3. The match is scored at once (§10.2) with outcome `disqualified`.
 
   Rounds aren't finished. Points already collected are recorded in the summary.
+  A `didNotPlayFaceDown` disqualification implicitly discloses that the led suit was the hidden
+  trump; this is an accepted exception (rules §10.3). The face-down card stays unrevealed.
 
 ### 9.5 What counts as trump
 - **56**: the trump suit. None in a no-trump match.
@@ -439,7 +441,8 @@ and the face-down card stays hidden.
   its first auction already occurred; the redeal check runs before any second auction starts, so
   its summary contains the public first-auction contract and zero token movement. Canonical summaries erase the unrevealed suit/card rather than relying only
   on view redaction. This prevents a later occupant of the old bidder's seat from learning it
-  after players move.
+  after players move. The only accepted exception is the suit implied by a `didNotPlayFaceDown`
+  outcome (§9.4, rules §10.3).
 
 ### 10.4 Session flow
 - **After a scored match** (made, failed, disqualified, surrendered, awarded):

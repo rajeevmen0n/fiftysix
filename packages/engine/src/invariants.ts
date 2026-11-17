@@ -29,7 +29,9 @@ export type EngineInvariantCode =
   | "invalidPoints"
   | "summaryLeaksHiddenTrump"
   | "invalidSummary"
-  | "invalidAuctionState";
+  | "invalidAuctionState"
+  | "invalidRound"
+  | "invalidReveal";
 
 /** Thrown for engine bugs. The message names only the invariant code. */
 export class EngineInvariantError extends Error {
@@ -278,6 +280,7 @@ function checkMatch(
     check(contract.team === teamOf(contract.bidder), "contractTeamMismatch");
     if (phase === "play") {
       checkPlayTrump(match, contract);
+      checkPlayProgress(state, match, contract);
     }
   }
 
@@ -437,6 +440,84 @@ function checkPlayTrump(match: MatchState, contract: Contract): void {
     return;
   }
   check(match.faceDown === null, "phaseMatchMismatch");
+}
+
+/**
+ * design §6.3, §9: the current round's lead suit and reveal-turn flags, the
+ * reveal round, forced face-down plays, and per-seat card counts during play.
+ */
+function checkPlayProgress(
+  state: EngineState,
+  match: MatchState,
+  contract: Contract,
+): void {
+  const { playerCount } = state.config;
+  const current = match.currentRound;
+  if (current === null) {
+    return;
+  }
+  const roundNumber = match.rounds.length;
+
+  check(
+    current.leadSuit === (current.plays[0]?.card.suit ?? null),
+    "invalidRound",
+  );
+
+  // A reveal happens in a 28 hidden-trump match, returns the face-down
+  // card, and marks the round it happened in.
+  const { revealedInRound } = match;
+  if (revealedInRound !== null) {
+    check(
+      contract.trump.type === "hidden" &&
+        match.faceDown === null &&
+        isNonNegativeWholeNumber(revealedInRound) &&
+        revealedInRound <= roundNumber,
+      "invalidReveal",
+    );
+  }
+  check(
+    current.revealedThisRound === (revealedInRound === roundNumber),
+    "invalidReveal",
+  );
+  // The asker asked on its own turn in this, the reveal round: it is still
+  // that seat's turn or the seat has since played.
+  if (current.revealAskedBy !== null) {
+    check(
+      current.revealedThisRound &&
+        (current.turn === current.revealAskedBy ||
+          current.plays.some((play) => play.seat === current.revealAskedBy)),
+      "invalidReveal",
+    );
+  }
+
+  // design §9.3: only the bidder's forced play, in the reveal round, comes
+  // from face-down storage.
+  const roundsWithPlays = [...match.rounds, current];
+  roundsWithPlays.forEach((round, index) => {
+    for (const play of round.plays) {
+      if (play.fromFaceDown) {
+        check(
+          contract.trump.type === "hidden" &&
+            play.seat === contract.bidder &&
+            play.card.suit === contract.trump.suit &&
+            index === revealedInRound,
+          "invalidReveal",
+        );
+      }
+    }
+  });
+
+  // Every seat plays one card per round: what it still holds (including a
+  // face-down card) plus this round's play is a full holding less the
+  // finished rounds.
+  const cardsPerSeat = buildDeck(state.config).length / playerCount;
+  for (let seat = 0; seat < playerCount; seat += 1) {
+    const held =
+      (match.hands[seat]?.length ?? 0) +
+      (match.faceDown?.owner === seat ? 1 : 0) +
+      (current.plays.some((play) => play.seat === seat) ? 1 : 0);
+    check(held === cardsPerSeat - roundNumber, "invalidRound");
+  }
 }
 
 function checkCardLocations(state: EngineState, match: MatchState): void {

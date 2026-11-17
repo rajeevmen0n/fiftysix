@@ -445,7 +445,7 @@ export function decideSessionAction(state: EngineState, action: EngineAction): D
 
 ---
 
-### [ ] E007: Implement card play, hidden-trump reveal, and disqualification
+### [x] E007: Implement card play, hidden-trump reveal, and disqualification
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 
@@ -464,8 +464,17 @@ export function decideSessionAction(state: EngineState, action: EngineAction): D
 
 ```ts
 export function legalCards(state: EngineState, seat: Seat): Card[];
-export function roundWinner(round: CurrentRound, contract: Contract): Seat;
+// `trumpRevealed`: whether a 28 hidden trump had been revealed by the end of this round.
+export function roundWinner(
+  round: Pick<CurrentRound, "plays">,
+  contract: Contract,
+  trumpRevealed: boolean,
+): Seat;
 export function decidePlayAction(state: EngineState, action: EngineAction): Decision;
+export function countingTrumpSuit(contract: Contract, trumpRevealed: boolean): Suit | null;
+export type RevealBlocker = "notInPlay" | "trumpNotHidden" | "leading" | "alreadyAsked" | "forced";
+export function revealBlocker(state: EngineState, seat: Seat): RevealBlocker | null;
+export function scorePlayedOutMatch(state: EngineState): EngineEvent[];
 ```
 
 - [ ] Accept card/reveal actions only during play, on the seat's turn, and outside a surrender

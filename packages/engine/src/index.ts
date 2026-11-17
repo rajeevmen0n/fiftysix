@@ -75,13 +75,24 @@ export type {
   TrumpEvent,
   TrumpRevealedEvent,
 } from "./events.js";
-export { decidePlaceCard, faceDownIsForced } from "./hidden-trump.js";
+export {
+  decidePlaceCard,
+  faceDownIsForced,
+  type RevealBlocker,
+  revealBlocker,
+} from "./hidden-trump.js";
 export { decideHostAction } from "./host-actions.js";
 export {
   assertEngineInvariants,
   type EngineInvariantCode,
   EngineInvariantError,
 } from "./invariants.js";
+export {
+  countingTrumpSuit,
+  decidePlayAction,
+  legalCards,
+  roundWinner,
+} from "./play.js";
 export { redealReason } from "./redeal.js";
 export type {
   ActionResult,
@@ -89,7 +100,7 @@ export type {
   EngineRejection,
   EngineRejectionCode,
 } from "./result.js";
-export { scoreMatch } from "./scoring.js";
+export { scoreMatch, scorePlayedOutMatch } from "./scoring.js";
 export { assertSeat, isSeatInRange, nextSeat, teamOf } from "./seats.js";
 export { decideSessionAction } from "./session.js";
 export {

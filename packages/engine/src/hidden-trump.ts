@@ -12,21 +12,24 @@ import type {
   FaceDownReturnedEvent,
   PlacingCardStartedEvent,
   PlayStartedEvent,
+  RevealAskedEvent,
+  TrumpRevealedEvent,
 } from "./events.js";
 import { accept, type Decision, reject } from "./result.js";
 import { nextSeat } from "./seats.js";
 import type { EngineState, MatchState } from "./state.js";
 import type { Card, Seat } from "./types.js";
 
-// 28 face-down card (design §8.4, rules §10.2–§10.3): placing it after an
-// auction, returning it when a new second-auction winner replaces it, and
-// whether the bidder is forced to play it.
+// 28 face-down card (design §8.4, §9.1, §9.3, rules §10.2–§10.3): placing it
+// after an auction, returning it when a new second-auction winner replaces
+// it, whether the bidder is forced to play it, and revealing it during play.
 
-function cloneCard(card: Card): Card {
+export function cloneCard(card: Card): Card {
   return { suit: card.suit, rank: card.rank, copy: card.copy };
 }
 
-function isCardLike(value: unknown): value is Card {
+/** A non-null object; field-level matching is left to `cardsEqual`. */
+export function isCardLike(value: unknown): value is Card {
   return value !== null && typeof value === "object";
 }
 
@@ -148,7 +151,7 @@ export function faceDownIsForced(state: EngineState, seat: Seat): boolean {
 
 function withMatch(
   state: EngineState,
-  type: "auction" | "placingCard",
+  type: "auction" | "placingCard" | "play",
   match: MatchState,
 ): EngineState {
   return {
@@ -237,5 +240,112 @@ export function evolveFaceDownReturned(
     ...phase.match,
     hands,
     faceDown: null,
+  });
+}
+
+/**
+ * `notInPlay`: no round is being played, so there is nothing to reveal into.
+ * `decidePlayAction` rejects that case as `actionNotAllowed` before asking,
+ * so `revealNotAllowed` only ever carries the other four reasons.
+ */
+export type RevealBlocker =
+  | "notInPlay"
+  | "trumpNotHidden"
+  | "leading"
+  | "alreadyAsked"
+  | "forced";
+
+/**
+ * Why `seat` can't ask for the reveal on its current turn (design §9.1), or
+ * null when it may. The caller checks the phase, the seat's turn, and that no
+ * surrender vote is running. Whether the seat could follow suit is not
+ * checked here: asking while able to is the disqualifying
+ * `revealWhileAbleToFollow` (design §9.4), not a blocked request.
+ */
+export function revealBlocker(
+  state: EngineState,
+  seat: Seat,
+): RevealBlocker | null {
+  const { phase } = state;
+  if (phase.type !== "play" || phase.match.currentRound === null) {
+    return "notInPlay";
+  }
+  const { contract, revealedInRound, faceDown, currentRound } = phase.match;
+  if (currentRound.revealAskedBy === seat) {
+    return "alreadyAsked";
+  }
+  if (
+    contract?.trump.type !== "hidden" ||
+    revealedInRound !== null ||
+    faceDown === null
+  ) {
+    return "trumpNotHidden";
+  }
+  if (currentRound.plays.length === 0) {
+    return "leading";
+  }
+  if (faceDownIsForced(state, seat)) {
+    return "forced";
+  }
+  return null;
+}
+
+/**
+ * design §9.1: the seat asked for the reveal on its turn, so it may play any
+ * card on this turn (§9.2). The flag clears when the round is won.
+ */
+export function evolveRevealAsked(
+  state: EngineState,
+  event: RevealAskedEvent,
+): EngineState {
+  const { phase } = state;
+  if (
+    phase.type !== "play" ||
+    phase.match.currentRound === null ||
+    phase.match.currentRound.turn !== event.seat ||
+    phase.match.revealedInRound !== null
+  ) {
+    throw new Error(
+      "Cannot apply revealAsked event: expected that seat's turn with trump still hidden",
+    );
+  }
+  return withMatch(state, "play", {
+    ...phase.match,
+    currentRound: { ...phase.match.currentRound, revealAskedBy: event.seat },
+  });
+}
+
+/**
+ * design §9.1, §9.3, rules §10.3: the face-down card is shown to everyone and
+ * goes back to the end of the bidder's hand, and the current round becomes
+ * the reveal round. A forced face-down play follows this event with
+ * `cardPlayed(fromFaceDown: true)`, which takes the card from that hand.
+ */
+export function evolveTrumpRevealed(
+  state: EngineState,
+  event: TrumpRevealedEvent,
+): EngineState {
+  const { phase } = state;
+  if (
+    phase.type !== "play" ||
+    phase.match.currentRound === null ||
+    phase.match.revealedInRound !== null ||
+    phase.match.faceDown === null ||
+    !cardsEqual(phase.match.faceDown.card, event.card)
+  ) {
+    throw new Error(
+      "Cannot apply trumpRevealed event: expected that face-down card during play",
+    );
+  }
+  const { owner } = phase.match.faceDown;
+  const hands = phase.match.hands.map((cards, seat) =>
+    seat === owner ? [...cards, cloneCard(event.card)] : cards,
+  );
+  return withMatch(state, "play", {
+    ...phase.match,
+    hands,
+    faceDown: null,
+    revealedInRound: phase.match.rounds.length,
+    currentRound: { ...phase.match.currentRound, revealedThisRound: true },
   });
 }

@@ -251,6 +251,10 @@ threshold below the average points per player:
 - If the match ends before the reveal, the hidden suit and face-down card are **not revealed by
   scoring or the result screen**. Post-match summaries, logs, views and events omit them for every
   recipient; the bidder retains only the knowledge they already had during play.
+- **Accepted exception**: in Auto-stop, the disqualification for not playing a forced face-down
+  card (design.md §4) can only happen when the hidden suit was led. Its public reason, in events,
+  the match summary and the session log, therefore implicitly discloses that the led suit was
+  trump. The face-down card itself is still not revealed.
 
 ### 10.4 Stakes
 - See §7.1. The defaults are 14–19 → 1/2, 20–27 → 2/3 and 28 → 3/4.

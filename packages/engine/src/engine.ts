@@ -22,8 +22,16 @@ import {
   evolveCardPlaced,
   evolveFaceDownReturned,
   evolvePlacingCardStarted,
+  evolveRevealAsked,
+  evolveTrumpRevealed,
 } from "./hidden-trump.js";
 import { decideHostAction } from "./host-actions.js";
+import {
+  decidePlayAction,
+  evolveCardPlayed,
+  evolveDisqualified,
+  evolveRoundWon,
+} from "./play.js";
 import { evolveRedealt } from "./redeal.js";
 import {
   type ActionResult,
@@ -131,7 +139,7 @@ function routeAction(state: EngineState, action: EngineAction): Decision {
       return decidePlaceCard(state, action);
     case "askReveal":
     case "playCard":
-      return unsupportedAction(state, action);
+      return decidePlayAction(state, action);
     case "proposeSurrender":
     case "voteSurrender":
       return unsupportedAction(state, action);
@@ -215,10 +223,15 @@ export function evolve(state: EngineState, event: EngineEvent): EngineState {
     case "nextMatchStarted":
       return evolveNextMatchStarted(state, event);
     case "revealAsked":
+      return evolveRevealAsked(state, event);
     case "trumpRevealed":
+      return evolveTrumpRevealed(state, event);
     case "cardPlayed":
+      return evolveCardPlayed(state, event);
     case "roundWon":
+      return evolveRoundWon(state, event);
     case "disqualified":
+      return evolveDisqualified(state, event);
     case "resultDecided":
     case "surrenderProposed":
     case "surrenderVoted":

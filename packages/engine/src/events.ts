@@ -107,7 +107,17 @@ export type FaceDownReturnedEvent = {
   seat: Seat;
   card: Card;
 };
+/**
+ * design §9.1: a seat that can't follow suit asked for the 28 trump reveal on
+ * its turn. Always followed by `trumpRevealed`; the asker may then play any
+ * card on this turn.
+ */
 export type RevealAskedEvent = { type: "revealAsked"; seat: Seat };
+/**
+ * design §9.1, §9.3: the face-down card is shown to everyone and returns to
+ * the bidder's hand; the current round becomes the reveal round. Follows
+ * `revealAsked`, or precedes a forced `cardPlayed(fromFaceDown: true)`.
+ */
 export type TrumpRevealedEvent = { type: "trumpRevealed"; card: Card };
 
 export type TrumpEvent =
@@ -119,18 +129,31 @@ export type TrumpEvent =
 
 // Play
 export type PlayStartedEvent = { type: "playStarted"; leader: Seat };
+/**
+ * design §9: a card moves from the seat's hand into the current round.
+ * `fromFaceDown` marks the forced 28 face-down play, which the preceding
+ * `trumpRevealed` has already put back into the bidder's hand.
+ */
 export type CardPlayedEvent = {
   type: "cardPlayed";
   seat: Seat;
   card: Card;
   fromFaceDown: boolean;
 };
+/**
+ * design §9.6: the round's last card was played. `points` are the round's
+ * card points, added to `team`; the winner leads the next round.
+ */
 export type RoundWonEvent = {
   type: "roundWon";
   seat: Seat;
   team: Team;
   points: number;
 };
+/**
+ * design §9.4, Auto-stop only: follows the offending `cardPlayed` (or
+ * `revealAsked`/`trumpRevealed`) and precedes `matchEnded(disqualified)`.
+ */
 export type DisqualifiedEvent = {
   type: "disqualified";
   seat: Seat;

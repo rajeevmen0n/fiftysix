@@ -8,11 +8,47 @@ implementation plans.
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
-| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E006 | Await user approval before E007 |
+| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E007 | Await user approval before E008 |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
+
+E007 — Implement card play, hidden-trump reveal, and disqualification — implementation commit
+`feat(engine): implement card play and trump reveal`.
+
+- Added `play.ts` (`legalCards`, `roundWinner`, `decidePlayAction`, `countingTrumpSuit`, and the
+  `cardPlayed`/`roundWon`/`disqualified` evolvers); `hidden-trump.ts` gained `revealBlocker` and
+  the `revealAsked`/`trumpRevealed` evolvers; `scoring.ts` gained `scorePlayedOutMatch`.
+- User decisions on 2026-11-17: (1) `roundWinner(round, contract, trumpRevealed)` takes a third
+  argument, because a `CurrentRound` alone can't tell whether a 28 hidden trump counts after the
+  reveal round (plan E007 interfaces updated). (2) **Rule clarification:** the Auto-stop
+  `didNotPlayFaceDown` disqualification implicitly discloses that the led suit was trump; this is
+  an accepted exception to the omission rule (rules.md §10.3, engine spec §9.4/§10.3, design §11).
+- Event orders: play → `cardPlayed`, `[roundWon]`, after the last round `matchEnded(made/failed)`
+  and `[sessionEnded]`; forced face-down → `trumpRevealed`, `cardPlayed(fromFaceDown)`; reveal →
+  `revealAsked`, `trumpRevealed`; Auto-stop → play/reveal events, `disqualified`,
+  `matchEnded(disqualified)`, `[sessionEnded]`, never `roundWon`. Block mode rejects
+  `illegalPlay {kind}`. Non-forced face-down play → `faceDownNotPlayable` (owner) or
+  `cardNotInHand` (others). Rejection order: surrender vote, `notYourTurn`, card/reveal checks.
+- Auto-stop scoring applies the emitted events inside `decide` through a local evolver switch in
+  `play.ts` (avoids an import cycle with `engine.ts`), then calls `scoreMatch`.
+- Notes for E008: after the final `roundWon`, `currentRound` is null while the phase is still
+  `play` until the following `matchEnded` (transient, inside one action); the after-round
+  certainty/surrender hook goes right after `roundWon` in `completePlay` (marked by a comment).
+- Invariants intentionally not added: stored round winner == `roundWinner`, and `trumpPlayed`
+  consistency; E006's `scoring.test.ts` `withRounds` builds rounds with fake winners. Add them if
+  that helper is rewritten to play legally.
+- E005 carry-over nits (`invariants.ts` empty face-down slot in `28-second`; two expressions of the
+  28 bid limit) and E006 nits remain open.
+- One Opus implementer and one Opus reviewer; one correction round (plan/doc updates, fixed
+  last-round "failed" test, `revealBlocker` `"notInPlay"` reason); reviewer approved.
+- 172 tests (31 new).
+- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (172/172),
+  `git diff --check`, and the zero-dependency manifest check all passed.
+- Next unit: E008, Implement result certainty and surrender voting, after user approval.
+
+## Previously completed unit
 
 E006 — Implement scoring, host resolutions, and session transitions — implementation commit
 `feat(engine): score matches and sessions`.
@@ -58,46 +94,6 @@ E006 — Implement scoring, host resolutions, and session transitions — implem
 - Verification on 2026-09-15: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (141/141),
   `git diff --check`, and the zero-dependency manifest check all passed.
 - Next unit: E007, Implement card play, hidden-trump reveal, and disqualification, after user
-  approval.
-
-## Previously completed unit
-
-E005 — Implement 28 auctions, face-down placement, and second deal — implementation commit
-`feat(engine): implement 28 auction flow`.
-
-- Added `hidden-trump.ts` (`decidePlaceCard`, `faceDownIsForced`, placement evolvers) and
-  `dealSecondStage` in `deal.ts`. Auction bid limits per stage live in `AUCTION_BID_LIMITS`
-  (`config.ts`), replacing E004's hard-coded 56 values. 28 first auction bids 14–28, number only;
-  the winner enters `placingCard`; forced 14 no trump skips placement.
-- Event orders (spec §8.3/§8.4): first auction end → `placingCardStarted(seat)`; `placeCard` →
-  `cardPlaced`, `auctionEnded(hidden)`, `dealt(second)`, then `auctionStarted(28-second)` or
-  `playStarted(dealer + 1)`. Second auction new winner → `[faceDownReturned]`,
-  `placingCardStarted`, then `cardPlaced`, `auctionEnded`, `playStarted`. All-pass carry →
-  `auctionEnded(carried)`, `playStarted`. Second-deal redeal → `dealt(second)`, `redealt`,
-  `[faceDownReturned]`, `matchEnded` with the public first-auction contract.
-- Carried bid is copied into `highBid`/`doubledBy` plus an untouched `carriedBid`; the second
-  auction's initial circuit ends after N passes while every call is a pass, otherwise N−1.
-- User decisions on 2026-09-14: (1) new public `placingCardStarted(seat)` event; a 28 match may
-  emit `auctionEnded` twice (spec §8.3, §8.4, §11.1, §11.2). (2) A 28 bid carrying `suit`
-  (including `null`) is rejected as `invalidBid`/`unexpectedSuit`; this is only a server-side
-  guard — the client never sends a suit for 28 and the protocol schema must reject it (§8.2).
-  (3) **Rule change:** a first-auction bid of 28 (doubled or not) skips the second auction, like a
-  redouble: second deal → redeal check → play (rules.md §10.2, spec §8.4, plan E005 text).
-  (4) `match.contract` keeps the first-auction contract through the second auction and its
-  placement, replaced only at the second `auctionEnded`; a restart in that window logs the public
-  first-auction contract (spec §6.3, §10.3). An invariant ties it to `carriedBid`.
-- Placement with the wrong seat returns `notYourTurn`; a card not in hand returns `cardNotInHand`.
-- Non-blocking review nits left for later: `invariants.ts` (~326–330) doesn't detect an empty
-  face-down slot in `28-second` after a non-pass call; `deal.ts` (~279) and `invariants.ts` (~302)
-  express the 28 limit two different ways.
-- One Opus implementer and one Opus reviewer; two correction rounds; reviewer approved.
-- 106 tests (24 new): forced 14, normal/redoubled/28 first auctions, every second-auction
-  minimum, all-pass carry, carried double/redouble, cancellation by raise, same-holder and
-  different winners, second-deal redeals (incl. redoubled), 28 affordability, illegal
-  placement, frozen-input replay, and card conservation after every action.
-- Verification on 2026-09-14: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (106/106),
-  `git diff --check`, and the zero-dependency manifest check all passed.
-- Next unit: E006, Implement scoring, host resolutions, and session transitions, after user
   approval.
 
 ## Implementation readiness

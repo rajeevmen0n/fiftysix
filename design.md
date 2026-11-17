@@ -205,7 +205,8 @@ them surrender.
   no auction occurred. A 28 automatic redeal after its first auction is logged with the public
   auction facts and no tokens moved. Restarted matches are always logged with no tokens moved.
   Entries omit a contract when none existed, and never expose a 28 trump that wasn't revealed
-  during play. The log also lists the results of earlier sessions in the room. It's deleted with
+  during play (except as implied by an Auto-stop `didNotPlayFaceDown` disqualification, rules
+  §10.3). The log also lists the results of earlier sessions in the room. It's deleted with
   the room.
 
 ## 12. UI

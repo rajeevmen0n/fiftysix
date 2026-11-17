@@ -223,3 +223,21 @@ export function scoreMatch(
   }
   return events;
 }
+
+/**
+ * Design §9.6, rules §7: scores a match whose last round has been won. The
+ * bidding team makes its contract when its points are at least the bid;
+ * otherwise it fails.
+ */
+export function scorePlayedOutMatch(state: EngineState): EngineEvent[] {
+  const { phase } = state;
+  if (phase.type !== "play" || phase.match.contract === null) {
+    throw new Error(
+      "scorePlayedOutMatch: expected a match in play with a contract",
+    );
+  }
+  const { contract, points } = phase.match;
+  return scoreMatch(state, {
+    type: points[contract.team] >= contract.amount ? "made" : "failed",
+  });
+}
