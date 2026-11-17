@@ -543,7 +543,7 @@ export function decideSurrenderAction(state: EngineState, action: EngineAction):
 
 ---
 
-### [ ] E009: Implement capabilities, views, and event redaction
+### [x] E009: Implement capabilities, views, and event redaction
 
 **Suggested implementer:** Claude Opus or GPT `gpt-5.6-sol`, high effort
 

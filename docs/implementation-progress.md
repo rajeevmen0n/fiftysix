@@ -8,11 +8,45 @@ implementation plans.
 | Track | Plan | Status | Current unit | Next action |
 |---|---|---|---|---|
 | Repository skeleton | `docs/repository-skeleton-implementation-plan.md` | Complete | S009 | Complete |
-| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E009 | Implement capabilities, views, and event redaction |
+| Pure engine | `docs/game-engine-implementation-plan.md` | In progress | E010 | Verify the complete engine and hand off to rooms |
 | Rooms subsystem | `docs/rooms-subsystem-implementation-plan.md` | Plan approved; engine prerequisite missing | — | Execute R001 after engine is complete |
 | UI and visual design | `docs/ui-visual-implementation-plan.md` | Plan approved; prerequisites missing | — | Execute U001 after skeleton, engine and rooms are complete |
 
 ## Last completed unit
+
+E009 — Implement capabilities, views, and event redaction — implementation commit
+`feat(engine): expose safe views and actions`.
+
+- Added `views.ts` (`view`, `redactEvent`, allowed actions, `allowedHostActions`) and
+  `views.test.ts`; `index.ts` exports the functions and view/redacted-event types. Interfaces
+  match plan E009.
+- Views: public data for everyone (Table view gets nothing private); a seat adds its own hand,
+  face-down card, `allowedActions`, and `resultDecided` only when its team is the certain loser.
+  Unrevealed 28 trump is `{type:"hidden", suit}` with `suit` only for the bidder. Round history
+  (none/last/full) and live points follow settings. No host or debug viewer: the service adds
+  `allowedHostActions`; /debug reads full state.
+- `faceDown` is null after the reveal (settled by rules §10.3, spec §9.3/§11.2/§11.3: the card is
+  shown once via the public `trumpRevealed` event, then is an ordinary hand card). **Optional
+  user question:** keep a public "revealed card" marker until it is played (needs a new state
+  field and spec §6.3/§11.3 edits). Reviewer recommends no.
+- Redaction is stateless: `dealt` → own hand + card counts (never `undealt`); `cardPlaced`/
+  `faceDownReturned` card only to owner; `auctionEnded` hidden suit only to bidder; `roundWon`
+  points null without live points; `resultDecided` → `null` for non-losing viewers; `matchEnded`
+  summary rebuilt from public fields. Caller must pass a seat valid for the event's table.
+- Allowed actions duplicate `decide`'s conditions by hand; a seeded exploration test (6 configs ×
+  2 seeds × 200 actions, ~5.4s) checks capabilities ↔ `decide` both ways for every seat, leak
+  checks for every viewer, and coverage of every phase/event/capability/disqualification kind.
+  E010's matrix should keep this agreement check.
+- Rooms notes: deliver redacted events only to the current occupant at delivery time, never
+  replay pre-occupancy per-seat events (rooms spec §7.3/§8.3); unseated viewers are `{type:"table"}`.
+- One Opus implementer and one Opus reviewer; one correction round (vacuous assertion, comment,
+  test runtime 18s → 6s, order-independent coverage test, doc comment); reviewer approved.
+- 220 tests (22 new).
+- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (220/220),
+  `git diff --check`, and the zero-dependency manifest check all passed.
+- Next unit: E010, Verify the complete engine and hand off to rooms.
+
+## Previously completed unit
 
 E008 — Implement result certainty and surrender voting — implementation commit
 `feat(engine): implement result certainty and surrender voting`.
@@ -44,42 +78,6 @@ E008 — Implement result certainty and surrender voting — implementation comm
   `git diff --check`, and the zero-dependency manifest check all passed.
 - Next unit: E009, Implement capabilities, views, and event redaction (user authorized continuing
   without per-unit approval for this session).
-
-## Previously completed unit
-
-E007 — Implement card play, hidden-trump reveal, and disqualification — implementation commit
-`feat(engine): implement card play and trump reveal`.
-
-- Added `play.ts` (`legalCards`, `roundWinner`, `decidePlayAction`, `countingTrumpSuit`, and the
-  `cardPlayed`/`roundWon`/`disqualified` evolvers); `hidden-trump.ts` gained `revealBlocker` and
-  the `revealAsked`/`trumpRevealed` evolvers; `scoring.ts` gained `scorePlayedOutMatch`.
-- User decisions on 2026-11-17: (1) `roundWinner(round, contract, trumpRevealed)` takes a third
-  argument, because a `CurrentRound` alone can't tell whether a 28 hidden trump counts after the
-  reveal round (plan E007 interfaces updated). (2) **Rule clarification:** the Auto-stop
-  `didNotPlayFaceDown` disqualification implicitly discloses that the led suit was trump; this is
-  an accepted exception to the omission rule (rules.md §10.3, engine spec §9.4/§10.3, design §11).
-- Event orders: play → `cardPlayed`, `[roundWon]`, after the last round `matchEnded(made/failed)`
-  and `[sessionEnded]`; forced face-down → `trumpRevealed`, `cardPlayed(fromFaceDown)`; reveal →
-  `revealAsked`, `trumpRevealed`; Auto-stop → play/reveal events, `disqualified`,
-  `matchEnded(disqualified)`, `[sessionEnded]`, never `roundWon`. Block mode rejects
-  `illegalPlay {kind}`. Non-forced face-down play → `faceDownNotPlayable` (owner) or
-  `cardNotInHand` (others). Rejection order: surrender vote, `notYourTurn`, card/reveal checks.
-- Auto-stop scoring applies the emitted events inside `decide` through a local evolver switch in
-  `play.ts` (avoids an import cycle with `engine.ts`), then calls `scoreMatch`.
-- Notes for E008: after the final `roundWon`, `currentRound` is null while the phase is still
-  `play` until the following `matchEnded` (transient, inside one action); the after-round
-  certainty/surrender hook goes right after `roundWon` in `completePlay` (marked by a comment).
-- Invariants intentionally not added: stored round winner == `roundWinner`, and `trumpPlayed`
-  consistency; E006's `scoring.test.ts` `withRounds` builds rounds with fake winners. Add them if
-  that helper is rewritten to play legally.
-- E005 carry-over nits (`invariants.ts` empty face-down slot in `28-second`; two expressions of the
-  28 bid limit) and E006 nits remain open.
-- One Opus implementer and one Opus reviewer; one correction round (plan/doc updates, fixed
-  last-round "failed" test, `revealBlocker` `"notInPlay"` reason); reviewer approved.
-- 172 tests (31 new).
-- Verification on 2026-11-17: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (172/172),
-  `git diff --check`, and the zero-dependency manifest check all passed.
-- Next unit: E008, Implement result certainty and surrender voting, after user approval.
 
 ## Implementation readiness
 
